@@ -19,6 +19,13 @@ def ajustar_prevalencia(p, delta: float):
     return 1 / (1 + np.exp(-(np.log(p / (1 - p)) + delta)))
 
 
+def prever_json(modelo: dict, df: pd.DataFrame) -> np.ndarray:
+    """Regressão logística exportada em JSON: p = sigmoid((x - média)/escala · coef + intercepto + delta)."""
+    X = (df[modelo["features"]].to_numpy(float) - np.array(modelo["media"])) / np.array(modelo["escala"])
+    z = X @ np.array(modelo["coef"]) + modelo["intercepto"] + modelo.get("delta", 0.0)
+    return 1 / (1 + np.exp(-z))
+
+
 def estimar_delta(p, taxa_alvo: float) -> float:
     """Encontra delta tal que a média das probabilidades ajustadas = taxa_alvo."""
     lo, hi = -10.0, 10.0

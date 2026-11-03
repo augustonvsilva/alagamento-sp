@@ -6,7 +6,7 @@ Validação: temporal (treino antes de DATA_CORTE, teste depois) — evita vazam
 e simula o uso real (prever o futuro com o passado).
 
 Saídas:
-    models/modelo.joblib           modelo final (re-treinado com todos os dados)
+    models/modelo.json             modelo final em coeficientes (re-treinado com todos os dados)
     models/metricas.json           métricas no teste, calibração, importância
     data/processed/celulas.parquet taxa histórica por célula
     data/processed/pontos.parquet  pontos de alagamento recorrentes e sua participação
@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 
-import joblib
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
@@ -60,6 +59,30 @@ def treinar(m, d: pd.DataFrame):
 
 def prever(m, delta, X) -> np.ndarray:
     return ajustar_prevalencia(m.predict_proba(X[FEATURES])[:, 1], delta)
+
+
+def exportar_json(m, nome: str, delta: float, d: pd.DataFrame) -> None:
+    """Exporta a regressão logística como coeficientes (JSON).
+
+    O app usa este arquivo: não precisa de scikit-learn, o que o torna leve o bastante
+    para rodar no navegador (GitHub Pages + stlite).
+    """
+    if not hasattr(m, "steps"):
+        print("AVISO: o modelo escolhido não é a regressão logística; o app (JSON) "
+              "usará uma regressão logística treinada à parte.")
+        m, delta = treinar(make_pipeline(StandardScaler(), LogisticRegression(C=1.0, max_iter=2000)), d)
+        nome = "Regressão logística"
+    scaler, lr = m.steps[0][1], m.steps[-1][1]
+    modelo = {"nome": nome, "features": FEATURES, "media": scaler.mean_.tolist(),
+              "escala": scaler.scale_.tolist(), "coef": lr.coef_[0].tolist(),
+              "intercepto": float(lr.intercept_[0]), "delta": float(delta),
+              "treinado_em": pd.Timestamp.now().isoformat()}
+    # Garante que a fórmula manual reproduz o scikit-learn
+    amostra = d.sample(5000, random_state=SEED)
+    from src.features import prever_json
+    assert np.allclose(prever_json(modelo, amostra), prever(m, delta, amostra), atol=1e-7)
+    (PATHS.model / "modelo.json").write_text(json.dumps(modelo, indent=2, ensure_ascii=False),
+                                             encoding="utf-8")
 
 
 def carregar_eventos() -> pd.DataFrame:
@@ -156,9 +179,8 @@ def main(corte: pd.Timestamp = DATA_CORTE) -> None:
     df_full = construir(chuva, taxa_total)
     df_full["y"] = df["y"].values
     final, delta_final = treinar(candidatos[melhor], df_full)
-    joblib.dump({"modelo": final, "features": FEATURES, "nome": melhor, "delta": delta_final,
-                 "treinado_em": pd.Timestamp.now().isoformat()}, PATHS.model / "modelo.joblib")
     print(f"Modelo final: delta de prevalência = {delta_final:.3f}")
+    exportar_json(final, melhor, delta_final, df_full)
 
     # Probabilidade x chuva (curva de resposta), para explicar o modelo
     grade = pd.DataFrame({"p1h": np.r_[0:61:2.0]})

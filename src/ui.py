@@ -55,6 +55,13 @@ def mapa(center=CENTRO_SP, zoom=11) -> folium.Map:
     return folium.Map(location=center, zoom_start=zoom, tiles="OpenStreetMap", control_scale=True)
 
 
+def mostrar_mapa(m: folium.Map, altura: int = 500):
+    """Renderiza o mapa como HTML estático (funciona no Streamlit normal e no navegador via stlite)."""
+    m.get_root().height = f"{altura}px"
+    # HTML gerado pelo próprio app (folium), não por usuários: seguro para iframe
+    st.iframe(m.get_root().render(), height=altura + 10)
+
+
 def camada_celulas(m: folium.Map, cel: pd.DataFrame, col_p="p_janela"):
     meio = PASSO_GRADE / 2
     for _, c in cel.iterrows():

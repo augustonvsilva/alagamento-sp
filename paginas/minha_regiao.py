@@ -1,7 +1,6 @@
 import folium
 import pandas as pd
 import streamlit as st
-from streamlit_folium import st_folium
 
 from src import geo, risk, servico, ui
 
@@ -61,7 +60,7 @@ with col_m:
     folium.Marker((lat, lon), tooltip="Você está aqui", icon=folium.Icon(color="blue", icon="home")).add_to(m)
     folium.Circle((lat, lon), radius=raio * 1000, color=ui.AZUL, fill=False, weight=1.5).add_to(m)
     ui.camada_pontos(m, perto)
-    st_folium(m, height=460, use_container_width=True, returned_objects=[], key="mapa_regiao")
+    ui.mostrar_mapa(m, 460)
 with col_g:
     st.markdown("**Previsão para a sua região**")
     serie = local[(local["time"] >= prev.agora - pd.Timedelta(hours=6))

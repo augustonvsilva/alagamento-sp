@@ -1,6 +1,5 @@
 import pandas as pd
 import streamlit as st
-from streamlit_folium import st_folium
 
 from src import risk, servico, ui
 
@@ -53,7 +52,7 @@ cel_mapa = cel.drop(columns=["p_janela"]).merge(
 m = ui.mapa()
 ui.camada_celulas(m, cel_mapa)
 ui.camada_pontos(m, pts_mapa)
-st_folium(m, height=560, use_container_width=True, returned_objects=[], key=f"mapa_geral_{horas}")
+ui.mostrar_mapa(m, 560)
 ui.legenda(horas)
 
 st.subheader("Ranking de risco")

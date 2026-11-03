@@ -12,7 +12,7 @@ st.set_page_config(page_title="Alerta Alagamento SP", page_icon="🌧️", layou
                                         "alagamentos em São Paulo com dados do CGE e Open-Meteo."})
 ui.css()
 
-faltando = [p.name for p in (MODELS / "modelo.joblib", PROCESSED / "pontos.parquet",
+faltando = [p.name for p in (MODELS / "modelo.json", PROCESSED / "pontos.parquet",
                              PROCESSED / "celulas.parquet") if not p.exists()]
 if faltando:
     st.error(f"Artefatos do modelo não encontrados ({', '.join(faltando)}). "

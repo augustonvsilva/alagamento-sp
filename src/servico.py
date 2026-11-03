@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -22,8 +21,8 @@ def agora_sp() -> pd.Timestamp:
 
 # ---------------------------------------------------------------- artefatos
 @st.cache_resource
-def modelo():
-    return joblib.load(MODELS / "modelo.joblib")
+def modelo() -> dict:
+    return json.loads((MODELS / "modelo.json").read_text(encoding="utf-8"))
 
 
 @st.cache_data
@@ -88,10 +87,8 @@ class Previsao:
 
 
 def _prever_celulas(fc: pd.DataFrame, taxa: pd.Series) -> pd.DataFrame:
-    m = modelo()
     X = features.construir(fc[["celula", "time", "precip", "prob"]], taxa)
-    X["p"] = features.ajustar_prevalencia(m["modelo"].predict_proba(X[m["features"]])[:, 1],
-                                          m.get("delta", 0.0))
+    X["p"] = features.prever_json(modelo(), X)
     # Sem chuva relevante nas últimas 6h o risco é desprezível (evita ruído do modelo)
     X.loc[X["p6h"] < 0.2, "p"] = X.loc[X["p6h"] < 0.2, "p"].clip(upper=1e-4)
     return X

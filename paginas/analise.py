@@ -1,8 +1,10 @@
+import base64
+import sys
+
 import altair as alt
 import pandas as pd
 import streamlit as st
 from folium.plugins import HeatMap
-from streamlit_folium import st_folium
 
 from src import servico, ui
 from src.nomes import expandir
@@ -135,7 +137,7 @@ c1, c2 = st.columns([3, 2])
 with c1:
     m = ui.mapa(zoom=11)
     HeatMap(ev[["lat", "lon"]].values.tolist(), radius=12, blur=15, min_opacity=0.3).add_to(m)
-    st_folium(m, height=460, use_container_width=True, returned_objects=[], key="heat")
+    ui.mostrar_mapa(m, 460)
     st.caption("Mapa de calor dos alagamentos registrados. Eventos sem endereço preciso ficam no centro do bairro.")
 with c2:
     top = (ev.assign(nome=ev["local_n"].map(expandir)).groupby(["nome", "bairro"]).size()
@@ -143,6 +145,11 @@ with c2:
     st.dataframe(top.rename(columns={"nome": "Local", "bairro": "Bairro"}), hide_index=True,
                  width="stretch", height=460)
 
-st.download_button("⬇️ Baixar dados (CSV)",
-                   ev.drop(columns=["dt"]).to_csv(index=False).encode("utf-8-sig"),
-                   "alagamentos_sp_cge.csv", "text/csv")
+csv = ev.drop(columns=["dt"]).to_csv(index=False).encode("utf-8-sig")
+if sys.platform == "emscripten":
+    # No navegador (GitHub Pages/stlite) o st.download_button não funciona: usa link com os dados embutidos
+    b64 = base64.b64encode(csv).decode()
+    st.markdown(f'<a href="data:text/csv;base64,{b64}" download="alagamentos_sp_cge.csv">'
+                "⬇️ Baixar dados (CSV)</a>", unsafe_allow_html=True)
+else:
+    st.download_button("⬇️ Baixar dados (CSV)", csv, "alagamentos_sp_cge.csv", "text/csv")

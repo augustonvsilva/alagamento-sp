@@ -2,7 +2,6 @@ import altair as alt
 import folium
 import pandas as pd
 import streamlit as st
-from streamlit_folium import st_folium
 
 from src import risk, servico, ui
 
@@ -90,7 +89,7 @@ with col_m:
     ids = sorted({i for l in tab["ids"] for i in l})
     ui.camada_pontos(m, prev.pts[prev.pts["ponto"].isin(ids)])
     m.fit_bounds([o[:2], d[:2]], padding=(30, 30))
-    st_folium(m, height=480, use_container_width=True, returned_objects=[], key="mapa_rota")
+    ui.mostrar_mapa(m, 480)
 
 with col_s:
     st.markdown(f"**Melhor horário para sair — {melhor['Rota']}**")

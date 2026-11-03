@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGINAS = ["paginas/visao_geral.py", "paginas/minha_regiao.py", "paginas/trajeto.py",
            "paginas/analise.py", "paginas/modelo.py"]
 
-pytestmark = pytest.mark.skipif(not (ROOT / "models" / "modelo.joblib").exists(),
+pytestmark = pytest.mark.skipif(not (ROOT / "models" / "modelo.json").exists(),
                                 reason="modelo não treinado")
 
 

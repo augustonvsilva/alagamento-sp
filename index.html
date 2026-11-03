@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+  <title>Alerta Alagamento SP</title>
+  <meta name="description" content="Previsão de alagamentos em São Paulo com o histórico do CGE e a previsão do tempo." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌧️</text></svg>" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@stlite/browser@1.12.0/build/stlite.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #fff; }
+    #carregando { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+                  justify-content: center; gap: .8rem; color: #1f4e79; text-align: center; padding: 1rem; }
+    #carregando h1 { margin: 0; font-size: 1.6rem; }
+    #carregando p { margin: 0; color: #555; max-width: 32rem; line-height: 1.4; }
+    .gota { font-size: 3rem; animation: cair 1.2s ease-in-out infinite; }
+    @keyframes cair { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(10px) } }
+  </style>
+</head>
+<body>
+  <div id="carregando">
+    <div class="gota">🌧️</div>
+    <h1>Alerta Alagamento SP</h1>
+    <p>Carregando o app no seu navegador… Na primeira visita isso leva de 20 a 40 segundos
+       (o Python é baixado uma única vez e fica em cache).</p>
+  </div>
+  <div id="root"></div>
+  <script type="module">
+    import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@1.12.0/build/stlite.js";
+
+    const arquivos = [
+      "app.py",
+      "src/__init__.py", "src/config.py", "src/features.py", "src/geo.py", "src/grade.py",
+      "src/nomes.py", "src/risk.py", "src/servico.py", "src/ui.py", "src/weather.py",
+      "paginas/visao_geral.py", "paginas/minha_regiao.py", "paginas/trajeto.py",
+      "paginas/analise.py", "paginas/modelo.py",
+      "models/modelo.json", "models/metricas.json",
+      "data/processed/alagamentos_geo.parquet", "data/processed/celulas.parquet",
+      "data/processed/diario.parquet", "data/processed/pontos.parquet",
+    ];
+    const files = Object.fromEntries(arquivos.map((f) => [f, { url: `./${f}` }]));
+
+    const observer = new MutationObserver(() => {
+      if (document.querySelector("[data-testid='stAppViewContainer']")) {
+        document.getElementById("carregando")?.remove();
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.getElementById("root"), { childList: true, subtree: true });
+
+    mount({
+      requirements: ["folium", "requests", "tzdata"],
+      entrypoint: "app.py",
+      files,
+      streamlitConfig: {
+        "theme.primaryColor": "#1f4e79",
+        "theme.backgroundColor": "#ffffff",
+        "theme.secondaryBackgroundColor": "#f2f5f9",
+        "theme.textColor": "#1b1f24",
+        "client.toolbarMode": "viewer",
+      },
+    }, document.getElementById("root"));
+  </script>
+</body>
+</html>

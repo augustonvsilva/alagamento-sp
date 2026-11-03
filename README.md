@@ -100,8 +100,19 @@ pytest
 Testes de unidade (parser do CGE, features, grade, risco) e de fumaça de todas as páginas.
 
 ### Publicar
-- **Streamlit Community Cloud (grátis):** suba o repositório para o GitHub e aponte o app para `app.py`.
-- **Docker:** `docker build -t alagamento-sp .` e depois `docker run -p 8501:8501 alagamento-sp`.
+
+**GitHub Pages (recomendado, grátis):** o app roda inteiro no navegador do visitante via
+[stlite](https://github.com/whitphx/stlite), Streamlit em WebAssembly, sem servidor. O arquivo
+[`index.html`](index.html) carrega o app. Para ativar, vá em **Settings → Pages → Source: Deploy from a branch →
+Branch: `main` / `(root)`**. O link fica `https://<usuário>.github.io/alagamento-sp/`. A primeira abertura
+leva ~20 s, porque o navegador baixa o Python; nas próximas o Python já está em cache.
+
+Para testar localmente: `python -m http.server 8600` e abrir http://localhost:8600.
+
+> Ao criar arquivos novos que o app usa (páginas, módulos, dados), adicione-os à lista `arquivos` do `index.html`.
+
+**Outras opções:** Streamlit Community Cloud (aponte para `app.py`) ou Docker
+(`docker build -t alagamento-sp .` e depois `docker run -p 8501:8501 alagamento-sp`).
 
 ## Estrutura
 
@@ -116,7 +127,8 @@ src/
   weather.py · geo.py   clientes Open-Meteo, Nominatim e OSRM
   grade.py · ui.py      grade espacial e componentes visuais
 pipeline/               coleta → geocodificação → chuva → treino
-models/                 modelo treinado e métricas
+models/                 modelo (coeficientes em JSON) e métricas
+index.html              página do GitHub Pages (app no navegador via stlite)
 data/processed/         eventos geocodificados, pontos, regiões, série diária
 tests/
 ```
