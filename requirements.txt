@@ -1,0 +1,10 @@
+# App
+streamlit==1.66.1
+pandas>=2.2
+numpy>=1.26
+requests>=2.31
+folium>=0.17
+streamlit-folium>=0.22
+scikit-learn>=1.5
+joblib>=1.4
+pyarrow>=15

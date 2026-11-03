@@ -1,0 +1,50 @@
+"""Alerta Alagamento SP — previsão de alagamentos a partir da previsão do tempo.
+
+Rodar:  streamlit run app.py
+"""
+import streamlit as st
+
+from src import servico, ui
+from src.config import MODELS, PROCESSED
+
+st.set_page_config(page_title="Alerta Alagamento SP", page_icon="🌧️", layout="wide",
+                   menu_items={"About": "Projeto acadêmico de análise de dados — previsão de "
+                                        "alagamentos em São Paulo com dados do CGE e Open-Meteo."})
+ui.css()
+
+faltando = [p.name for p in (MODELS / "modelo.joblib", PROCESSED / "pontos.parquet",
+                             PROCESSED / "celulas.parquet") if not p.exists()]
+if faltando:
+    st.error(f"Artefatos do modelo não encontrados ({', '.join(faltando)}). "
+             "Rode o pipeline de dados: `python -m pipeline.executar` (veja o README).")
+    st.stop()
+
+paginas = st.navigation({
+    "Previsão": [
+        st.Page("paginas/visao_geral.py", title="Visão geral", icon="🗺️", default=True),
+        st.Page("paginas/minha_regiao.py", title="Minha região", icon="📍"),
+        st.Page("paginas/trajeto.py", title="Trajeto seguro", icon="🚗"),
+    ],
+    "Dados e modelo": [
+        st.Page("paginas/analise.py", title="Análise histórica", icon="📊"),
+        st.Page("paginas/modelo.py", title="Como o modelo funciona", icon="🧠"),
+    ],
+})
+
+with st.sidebar:
+    st.markdown("### 🌧️ Alerta Alagamento SP")
+    st.caption("Previsão de alagamentos baseada no histórico do CGE e na previsão do tempo.")
+    with st.expander("🧪 Modo simulação", expanded=False):
+        st.caption("Força uma chuva em toda a cidade — útil para demonstrar o app em dia seco.")
+        ativo = st.toggle("Ativar simulação", key="sim_on")
+        mm = st.slider("Intensidade (mm/h)", 1, 80, 20, key="sim_mm", disabled=not ativo)
+        h = st.slider("Duração (horas)", 1, 6, 2, key="sim_h", disabled=not ativo)
+        st.session_state["sim"] = (mm, h) if ativo else None
+    st.caption(f"Previsão das {servico.agora_sp():%Hh} · atualiza a cada 30 min")
+    if st.button("🔄 Atualizar agora", width="stretch"):
+        st.cache_data.clear()
+        st.rerun()
+    st.divider()
+    st.caption("Fontes: CGE/Prefeitura de SP · Open-Meteo · OpenStreetMap · OSRM")
+
+paginas.run()

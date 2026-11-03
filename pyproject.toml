@@ -1,0 +1,12 @@
+[project]
+name = "alagamento-sp"
+version = "1.0.0"
+description = "Previsão de alagamentos em São Paulo a partir do histórico do CGE e da previsão do tempo"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
