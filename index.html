@@ -38,7 +38,18 @@
       "data/processed/alagamentos_geo.parquet", "data/processed/celulas.parquet",
       "data/processed/diario.parquet", "data/processed/pontos.parquet",
     ];
-    const files = Object.fromEntries(arquivos.map((f) => [f, { url: `./${f}` }]));
+    // Pasta base do site. No GitHub Pages de projeto é "/<repositório>/"; localmente, "/".
+    // Necessário porque o app muda a URL (ex.: /alagamento-sp/trajeto) e o 404.html,
+    // cópia desta página, é servido nessas sub-URLs ao recarregar.
+    const partes = location.pathname.split("/");
+    const base = location.hostname.endsWith("github.io") && partes.length > 2 ? `/${partes[1]}/` : "/";
+    const files = Object.fromEntries(arquivos.map((f) => [f, { url: base + f }]));
+
+    // Sub-URL (ex.: /alagamento-sp/trajeto) -> volta para a base e pede a página via ?pagina=
+    const resto = location.pathname.slice(base.length).replace(/\/$/, "");
+    if (resto && !["index.html", "404.html"].includes(resto)) {
+      history.replaceState(null, "", `${base}?pagina=${encodeURIComponent(resto)}`);
+    }
 
     const observer = new MutationObserver(() => {
       if (document.querySelector("[data-testid='stAppViewContainer']")) {

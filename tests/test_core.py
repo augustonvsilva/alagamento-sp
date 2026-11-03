@@ -91,6 +91,24 @@ def test_prob_alguma_e_niveis():
     assert risk.pior(["Baixo", "Alto", "Moderado"]) == "Alto"
 
 
+def test_404_html_igual_ao_index():
+    """O GitHub Pages serve o 404.html nas sub-URLs (ex.: /trajeto): precisa ser cópia do index.html."""
+    from pathlib import Path
+    raiz = Path(__file__).resolve().parent.parent
+    assert (raiz / "404.html").read_bytes() == (raiz / "index.html").read_bytes(), \
+        "Rode: Copy-Item index.html 404.html"
+
+
+def test_index_html_lista_arquivos_do_app():
+    """Todo .py usado pelo app precisa estar na lista `arquivos` do index.html (stlite)."""
+    from pathlib import Path
+    raiz = Path(__file__).resolve().parent.parent
+    html = (raiz / "index.html").read_text(encoding="utf-8")
+    for arq in ["app.py", *[f"src/{p.name}" for p in (raiz / "src").glob("*.py")],
+                *[f"paginas/{p.name}" for p in (raiz / "paginas").glob("*.py")]]:
+        assert f'"{arq}"' in html, f"{arq} não está no index.html"
+
+
 def test_simulacao_so_altera_janela():
     t = pd.date_range("2026-01-01", periods=6, freq="h")
     fc = pd.DataFrame({"time": t, "precip": 0.0, "prob": 0.0})

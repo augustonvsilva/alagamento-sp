@@ -19,7 +19,7 @@ if faltando:
              "Rode o pipeline de dados: `python -m pipeline.executar` (veja o README).")
     st.stop()
 
-paginas = st.navigation({
+PAGINAS = {
     "Previsão": [
         st.Page("paginas/visao_geral.py", title="Visão geral", icon="🗺️", default=True),
         st.Page("paginas/minha_regiao.py", title="Minha região", icon="📍"),
@@ -29,7 +29,17 @@ paginas = st.navigation({
         st.Page("paginas/analise.py", title="Análise histórica", icon="📊"),
         st.Page("paginas/modelo.py", title="Como o modelo funciona", icon="🧠"),
     ],
-})
+}
+paginas = st.navigation(PAGINAS)
+
+# Link direto para uma página (?pagina=trajeto). Usado pelo GitHub Pages ao recarregar
+# uma sub-URL como /alagamento-sp/trajeto (veja index.html / 404.html).
+alvo = st.query_params.get("pagina")
+if alvo:
+    del st.query_params["pagina"]
+    destino = {p.url_path: p for grupo in PAGINAS.values() for p in grupo}.get(alvo)
+    if destino is not None and destino.url_path != paginas.url_path:
+        st.switch_page(destino)
 
 with st.sidebar:
     st.markdown("### 🌧️ Alerta Alagamento SP")
