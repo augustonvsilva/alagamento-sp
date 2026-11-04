@@ -9,10 +9,12 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@stlite/browser@1.12.0/build/stlite.css" />
   <style>
     body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #fff; }
-    #carregando { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+    #carregando { position: fixed; inset: 0; z-index: 100000; background: #fff; display: flex; flex-direction: column; align-items: center;
                   justify-content: center; gap: .8rem; color: #1f4e79; text-align: center; padding: 1rem; }
     #carregando h1 { margin: 0; font-size: 1.6rem; }
     #carregando p { margin: 0; color: #555; max-width: 32rem; line-height: 1.4; }
+    #carregando #status { color: #1f4e79; font-weight: 600; }
+    #carregando .nota { font-size: .9rem; }
     .gota { font-size: 3rem; animation: cair 1.2s ease-in-out infinite; }
     @keyframes cair { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(10px) } }
   </style>
@@ -21,7 +23,8 @@
   <div id="carregando">
     <div class="gota">🌧️</div>
     <h1>Alerta Alagamento SP</h1>
-    <p>Carregando o app no seu navegador… Na primeira visita isso leva de 20 a 40 segundos
+    <p id="status">📍 Permita o acesso à sua localização para mostrarmos como está a sua área.</p>
+    <p class="nota">Carregando o app… Na primeira vez isso leva de 20 a 40 segundos
        (o Python é baixado uma única vez e fica em cache).</p>
   </div>
   <div id="root"></div>
@@ -43,21 +46,50 @@
     // cópia desta página, é servido nessas sub-URLs ao recarregar.
     const partes = location.pathname.split("/");
     const base = location.hostname.endsWith("github.io") && partes.length > 2 ? `/${partes[1]}/` : "/";
-    const files = Object.fromEntries(arquivos.map((f) => [f, { url: base + f }]));
+    const files = Object.fromEntries(arquivos.map((f) => [f, { url: new URL(base + f, location.origin).href }]));
 
     // Sub-URL (ex.: /alagamento-sp/trajeto) -> volta para a base e pede a página via ?pagina=
     const resto = location.pathname.slice(base.length).replace(/\/$/, "");
-    if (resto && !["index.html", "404.html"].includes(resto)) {
-      history.replaceState(null, "", `${base}?pagina=${encodeURIComponent(resto)}`);
+    const subpagina = resto && !["index.html", "404.html"].includes(resto);
+    const params = new URLSearchParams(location.search);
+    if (subpagina) params.set("pagina", resto);
+
+    // Localização do aparelho: pedida logo na abertura. Com ela, o app abre direto em
+    // "Minha região" mostrando o risco na área da pessoa (?lat=..&lon=.., lidos no app.py).
+    const status = document.getElementById("status");
+    const posicao = await new Promise((ok) => {
+      if (!navigator.geolocation) return ok(null);
+      const limite = setTimeout(() => ok(null), 30000);  // não trava o app se ninguém responder
+      navigator.geolocation.getCurrentPosition(
+        (p) => { clearTimeout(limite); ok(p.coords); },
+        () => { clearTimeout(limite); ok(null); },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 300000 },
+      );
+    });
+    if (posicao) {
+      params.set("lat", posicao.latitude.toFixed(5));
+      params.set("lon", posicao.longitude.toFixed(5));
+      if (!subpagina) params.set("pagina", "minha_regiao");
+      status.textContent = "📍 Localização encontrada! Preparando a previsão da sua área…";
+    } else {
+      status.textContent = "Sem localização — você poderá buscar um endereço no app.";
     }
+    const busca = params.toString();
+    history.replaceState(null, "", `${base}${busca ? "?" + busca : ""}`);
 
     const observer = new MutationObserver(() => {
-      if (document.querySelector("[data-testid='stAppViewContainer']")) {
+      // Some só quando a página de verdade aparece (título ou erro), não no esqueleto do stlite
+      if (document.querySelector("[data-testid='stHeading'], [data-testid='stException'], [data-testid='stAlert']")) {
         document.getElementById("carregando")?.remove();
         observer.disconnect();
       }
     });
     observer.observe(document.getElementById("root"), { childList: true, subtree: true });
+    setTimeout(() => {
+      if (document.getElementById("carregando")) {
+        status.textContent = "Está demorando mais que o normal… Confira sua conexão com a internet.";
+      }
+    }, 240000);
 
     mount({
       requirements: ["folium", "requests", "tzdata"],

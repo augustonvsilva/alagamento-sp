@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Gota de chuva com ondas (área segura do ícone adaptativo: 66x66 no centro de 108x108) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M54,26 C54,26 38,45 38,56 A16,16 0 0 0 70,56 C70,45 54,26 54,26 Z" />
+    <path android:fillColor="#9CC9F0"
+        android:pathData="M46,55 A8,8 0 0 0 54,64 L54,61 A5,5 0 0 1 49,55 Z" />
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="3.5" android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M33,79 Q38.5,74 44,79 T55,79 T66,79 T77,79" />
+</vector>

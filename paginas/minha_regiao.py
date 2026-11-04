@@ -3,20 +3,36 @@ import pandas as pd
 import streamlit as st
 
 from src import geo, risk, servico, ui
+from src.config import BBOX
 
 ui.aviso_simulacao()
 st.title("Como está a sua região")
 
+USAR_GPS, USAR_END = "📍 Minha localização", "🔎 Buscar endereço"
+minha = st.session_state.get("minha_loc")
+dentro_sp = minha is not None and (BBOX["lat_min"] <= minha[0] <= BBOX["lat_max"]
+                                   and BBOX["lon_min"] <= minha[1] <= BBOX["lon_max"])
+if minha is not None and not dentro_sp:
+    st.info("Sua localização parece estar fora da cidade de São Paulo — a previsão cobre só a "
+            "capital. Busque um endereço em SP abaixo.")
+
 c1, c2 = st.columns([3, 1])
-end = c1.text_input("Endereço, bairro ou ponto de referência", "Praça da Sé, São Paulo",
-                    placeholder="Ex.: Rua Augusta, 500")
+modo = USAR_END
+if dentro_sp:
+    modo = c1.radio("Local", [USAR_GPS, USAR_END], horizontal=True, label_visibility="collapsed")
 raio = c2.select_slider("Raio", [0.5, 1, 2, 3, 5], value=2, format_func=lambda r: f"{r} km")
 
-loc = servico.geocode(end) if end.strip() else None
-if not loc:
-    st.info("Não encontrei esse endereço. Tente incluir o bairro ou o número.")
-    st.stop()
-lat, lon, nome_end = loc
+if modo == USAR_GPS:
+    lat, lon = minha
+    nome_end = servico.endereco_de(lat, lon)
+else:
+    end = c1.text_input("Endereço, bairro ou ponto de referência", "Praça da Sé, São Paulo",
+                        placeholder="Ex.: Rua Augusta, 500")
+    loc = servico.geocode(end) if end.strip() else None
+    if not loc:
+        st.info("Não encontrei esse endereço. Tente incluir o bairro ou o número.")
+        st.stop()
+    lat, lon, nome_end = loc
 st.caption(f"📍 {nome_end}")
 
 sim = st.session_state.get("sim")

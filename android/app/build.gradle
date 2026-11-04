@@ -1,0 +1,66 @@
+plugins {
+    id "com.android.application"
+}
+
+// O app web (index.html + código Python + modelo + dados) é copiado da raiz do repositório
+// para dentro do APK a cada build — não há cópia duplicada versionada aqui.
+def raiz = rootProject.projectDir.parentFile
+def pastaWeb = layout.buildDirectory.dir("web-assets")
+
+tasks.register("copiarApp", Sync) {
+    from(raiz) {
+        include "index.html", "app.py"
+        include "src/*.py", "paginas/*.py"
+        include "models/*.json"
+        include "data/processed/alagamentos_geo.parquet", "data/processed/celulas.parquet"
+        include "data/processed/diario.parquet", "data/processed/pontos.parquet"
+    }
+    into pastaWeb.map { it.dir("www") }
+}
+
+android {
+    namespace "br.alagamentosp.app"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "br.alagamentosp.app"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    // Chave de assinatura: fica só na máquina de quem publica (assinatura.jks + assinatura.properties,
+    // ambos fora do git). Sem ela (ex.: GitHub Actions), o APK sai com a assinatura de debug.
+    def props = new Properties()
+    def arqProps = file("assinatura.properties")
+    if (arqProps.exists()) arqProps.withInputStream { props.load(it) }
+    signingConfigs {
+        if (arqProps.exists()) {
+            projeto {
+                storeFile file(props.storeFile)
+                storePassword props.storePassword
+                keyAlias props.keyAlias
+                keyPassword props.keyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig arqProps.exists() ? signingConfigs.projeto : signingConfigs.debug
+        }
+    }
+
+    sourceSets {
+        main.assets.srcDirs += pastaWeb
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+tasks.named("preBuild") { dependsOn "copiarApp" }

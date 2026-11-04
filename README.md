@@ -9,7 +9,7 @@ do tempo hora a hora. Projeto acadêmico de análise de dados.
 | Página | Para quê |
 |---|---|
 | 🗺️ **Visão geral** | Mapa e ranking dos pontos com maior chance de alagar nas próximas 3, 6, 12 ou 24h, alertas e previsão hora a hora de cada ponto |
-| 📍 **Minha região** | Para um endereço: tempo agora, chuva e risco previstos, pontos de alagamento próximos e histórico da região |
+| 📍 **Minha região** | Para a **localização atual** (pedida ao abrir o app) ou um endereço: tempo agora, chuva e risco previstos, pontos de alagamento próximos e histórico da região |
 | 🚗 **Trajeto seguro** | Compara rotas alternativas pela chance de passar por um ponto alagado e indica o **melhor horário para sair** |
 | 📊 **Análise histórica** | Análise exploratória: sazonalidade, hora do dia, zonas, relação chuva × alagamento, mapa de calor, download dos dados |
 | 🧠 **Como o modelo funciona** | Métricas de validação, calibração, importância das variáveis e limitações |
@@ -111,6 +111,28 @@ Para testar localmente: `python -m http.server 8600` e abrir http://localhost:86
 
 > Ao criar arquivos novos que o app usa (páginas, módulos, dados), adicione-os à lista `arquivos` do `index.html`.
 
+**App Android (APK):** baixe [`apk/AlertaAlagamentoSP.apk`](apk/AlertaAlagamentoSP.apk) no celular e
+instale (o Android pede para permitir "instalar apps desconhecidos"). Ao abrir, o app **pede a
+localização** e já mostra o risco de alagamento na área da pessoa. Se ela recusar, o app abre
+normalmente e dá para buscar um endereço.
+
+Como funciona: [`android/`](android/) é um app nativo mínimo (Java, sem bibliotecas) com um WebView
+que roda o mesmo `index.html` + código Python empacotados dentro do APK, servidos na origem segura
+`https://appassets.androidplatform.net/`. O `index.html` pede a localização (`navigator.geolocation`,
+que no app aciona a permissão do Android) e abre a página "Minha região" com `?lat=..&lon=..`.
+Precisa de internet (previsão do tempo, mapas e, na 1ª abertura, o Python).
+
+Para gerar o APK de novo (requer JDK 17 e Android SDK; `ANDROID_HOME` apontando para o SDK):
+```powershell
+cd android
+.\gradlew.bat assembleRelease     # -> app\build\outputs\apk\release\app-release.apk
+eleasepp-release.apk
+```
+O GitHub Actions também gera o APK a cada push (workflow **apk**, aba Actions → Artifacts).
+A chave de assinatura (`android/app/assinatura.jks` + `assinatura.properties`) fica **só na máquina
+de quem publica**, fora do git. Sem ela o APK é assinado com a chave de debug; nesse caso, para
+instalar por cima de uma versão assinada com outra chave, desinstale a anterior antes.
+
 **Outras opções:** Streamlit Community Cloud (aponte para `app.py`) ou Docker
 (`docker build -t alagamento-sp .` e depois `docker run -p 8501:8501 alagamento-sp`).
 
@@ -129,6 +151,8 @@ src/
 pipeline/               coleta → geocodificação → chuva → treino
 models/                 modelo (coeficientes em JSON) e métricas
 index.html              página do GitHub Pages (app no navegador via stlite)
+android/                app Android (WebView que empacota o index.html e o app)
+apk/                    APK pronto para instalar
 data/processed/         eventos geocodificados, pontos, regiões, série diária
 tests/
 ```

@@ -22,6 +22,15 @@ def geocode(endereco: str):
     return float(res[0]["lat"]), float(res[0]["lon"]), res[0]["display_name"]
 
 
+def endereco_de(lat: float, lon: float) -> str | None:
+    """Geocodificação reversa: coordenadas -> endereço legível (ou None)."""
+    params = {"lat": lat, "lon": lon, "format": "json", "zoom": 17}
+    r = requests.get("https://nominatim.openstreetmap.org/reverse",
+                     params=params, headers=HEADERS, timeout=20)
+    r.raise_for_status()
+    return r.json().get("display_name")
+
+
 def rotas(origem, destino, alternativas=True):
     """Lista de rotas de carro. Cada rota: dict(dist_km, dur_min, path=[[lat, lon], ...])."""
     (la1, lo1), (la2, lo2) = origem, destino

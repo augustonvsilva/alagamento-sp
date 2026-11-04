@@ -1,0 +1,200 @@
+package br.alagamentosp.app;
+
+import android.Manifest;
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.location.LocationManager;
+import android.net.Uri;
+import android.os.Bundle;
+import android.provider.Settings;
+import android.webkit.GeolocationPermissions;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Casca nativa do app: um WebView que roda o app Streamlit (via stlite) empacotado no APK.
+ *
+ * Os arquivos do app ficam em assets/www e são servidos na origem segura
+ * https://appassets.androidplatform.net/ (necessária para a API de geolocalização funcionar).
+ * Ao abrir, o app pede a permissão de localização; o index.html usa a posição para abrir
+ * direto na página "Minha região".
+ */
+public class MainActivity extends Activity {
+
+    private static final String HOST = "appassets.androidplatform.net";
+    private static final String INICIO = "https://" + HOST + "/";
+    private static final int PEDIDO_LOCALIZACAO = 1;
+
+    private static final Map<String, String> TIPOS = new HashMap<>();
+    static {
+        TIPOS.put("html", "text/html");
+        TIPOS.put("js", "text/javascript");
+        TIPOS.put("css", "text/css");
+        TIPOS.put("json", "application/json");
+        TIPOS.put("py", "text/x-python");
+        TIPOS.put("svg", "image/svg+xml");
+        TIPOS.put("png", "image/png");
+    }
+
+    private WebView web;
+    // Pedido de geolocalização do WebView aguardando a resposta da permissão do Android
+    private GeolocationPermissions.Callback geoCallback;
+    private String geoOrigem;
+    private boolean permissaoRespondida;
+
+    @Override
+    protected void onCreate(Bundle estado) {
+        super.onCreate(estado);
+        getWindow().setStatusBarColor(Color.parseColor("#1f4e79"));
+
+        web = new WebView(this);
+        web.setBackgroundColor(Color.WHITE);
+        setContentView(web);
+
+        WebSettings s = web.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setGeolocationEnabled(true);
+        s.setAllowFileAccess(false);
+        s.setAllowContentAccess(false);
+        s.setMediaPlaybackRequiresUserGesture(true);
+
+        web.setWebViewClient(new Cliente());
+        web.setWebChromeClient(new ClienteChrome());
+
+        // Já na abertura: pede a localização para mostrar como está a área da pessoa.
+        permissaoRespondida = temPermissao();
+        if (!permissaoRespondida) {
+            requestPermissions(new String[]{
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION}, PEDIDO_LOCALIZACAO);
+        } else {
+            sugerirLigarGps();
+        }
+
+        if (estado != null) {
+            web.restoreState(estado);
+        } else {
+            web.loadUrl(INICIO);
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle estado) {
+        super.onSaveInstanceState(estado);
+        web.saveState(estado);
+    }
+
+    private boolean temPermissao() {
+        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int codigo, String[] permissoes, int[] resultados) {
+        if (codigo != PEDIDO_LOCALIZACAO) return;
+        permissaoRespondida = true;
+        boolean ok = temPermissao();
+        if (geoCallback != null) {
+            geoCallback.invoke(geoOrigem, ok, false);
+            geoCallback = null;
+        }
+        if (ok) sugerirLigarGps();
+    }
+
+    /** Com a permissão dada mas a localização do aparelho desligada, oferece ligá-la. */
+    private void sugerirLigarGps() {
+        LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
+        if (lm == null || lm.isLocationEnabled()) return;
+        new AlertDialog.Builder(this)
+                .setTitle("Localização desligada")
+                .setMessage("Ative a localização do celular para vermos o risco de alagamento na sua área.")
+                .setPositiveButton("Ativar", (d, w) -> {
+                    try {
+                        startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+                    } catch (ActivityNotFoundException ignorado) { }
+                })
+                .setNegativeButton("Agora não", null)
+                .show();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (web.canGoBack()) web.goBack();
+        else super.onBackPressed();
+    }
+
+    private class ClienteChrome extends WebChromeClient {
+        @Override
+        public void onGeolocationPermissionsShowPrompt(String origem, GeolocationPermissions.Callback cb) {
+            if (temPermissao()) {
+                cb.invoke(origem, true, false);
+            } else if (permissaoRespondida) {
+                cb.invoke(origem, false, false);  // a pessoa recusou: o app segue sem localização
+            } else {
+                geoOrigem = origem;  // aguarda a resposta do diálogo aberto no onCreate
+                geoCallback = cb;
+            }
+        }
+    }
+
+    private class Cliente extends WebViewClient {
+        @Override
+        public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
+            Uri u = req.getUrl();
+            if (HOST.equals(u.getHost())) return false;
+            if (!req.isForMainFrame()) return false;
+            // Links externos (fontes de dados, mapas etc.) abrem no navegador do celular
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, u));
+            } catch (ActivityNotFoundException ignorado) { }
+            return true;
+        }
+
+        @Override
+        public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest req) {
+            Uri u = req.getUrl();
+            if (!HOST.equals(u.getHost())) return null;  // CDN, APIs de tempo etc.: rede normal
+            String caminho = u.getPath() == null ? "" : u.getPath().replaceFirst("^/+", "");
+            if (caminho.isEmpty()) caminho = "index.html";
+            InputStream in = abrir(caminho);
+            if (in == null && !caminho.contains(".")) {
+                // Sub-URL de página do Streamlit (ex.: /minha_regiao) ao recarregar
+                caminho = "index.html";
+                in = abrir(caminho);
+            }
+            if (in == null) {
+                return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found",
+                        new HashMap<>(), null);
+            }
+            String ext = caminho.substring(caminho.lastIndexOf('.') + 1).toLowerCase();
+            String tipo = TIPOS.getOrDefault(ext, "application/octet-stream");
+            Map<String, String> cab = new HashMap<>();
+            cab.put("Cache-Control", "no-cache");
+            cab.put("Access-Control-Allow-Origin", "*");
+            return new WebResourceResponse(tipo, tipo.startsWith("text") ? "utf-8" : null,
+                    200, "OK", cab, in);
+        }
+
+        private InputStream abrir(String caminho) {
+            try {
+                return getAssets().open("www/" + caminho);
+            } catch (IOException e) {
+                return null;
+            }
+        }
+    }
+}

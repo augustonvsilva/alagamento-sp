@@ -71,6 +71,15 @@ def geocode(q: str):
     return geo.geocode(q)
 
 
+@st.cache_data(ttl=86400, show_spinner="Identificando sua localização...")
+def endereco_de(lat: float, lon: float) -> str:
+    try:
+        nome = geo.endereco_de(round(lat, 5), round(lon, 5))
+    except Exception:  # noqa: BLE001 — o nome é só cosmético
+        nome = None
+    return nome or f"{lat:.5f}, {lon:.5f}"
+
+
 @st.cache_data(ttl=3600, show_spinner="Calculando trajetos...")
 def rotas(o: tuple, d: tuple):
     return geo.rotas(o, d)

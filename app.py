@@ -32,6 +32,16 @@ PAGINAS = {
 }
 paginas = st.navigation(PAGINAS)
 
+# Localização do aparelho (?lat=..&lon=..), enviada pelo index.html quando a pessoa permite
+# o acesso à localização (no navegador ou no app Android). Usada em "Minha região".
+if "lat" in st.query_params and "lon" in st.query_params:
+    try:
+        st.session_state["minha_loc"] = (float(st.query_params["lat"]), float(st.query_params["lon"]))
+    except ValueError:
+        pass
+    del st.query_params["lat"]
+    del st.query_params["lon"]
+
 # Link direto para uma página (?pagina=trajeto). Usado pelo GitHub Pages ao recarregar
 # uma sub-URL como /alagamento-sp/trajeto (veja index.html / 404.html).
 alvo = st.query_params.get("pagina")
