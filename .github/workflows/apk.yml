@@ -7,14 +7,14 @@ on:
 
 jobs:
   apk:
-    runs-on: ubuntu-latest
+    # A imagem Ubuntu 24.04 do GitHub já vem com o Android SDK (variável ANDROID_HOME)
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
-      - uses: android-actions/setup-android@v3
       - name: Gerar APK
         working-directory: android
         run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon
