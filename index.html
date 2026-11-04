@@ -15,6 +15,8 @@
     #carregando p { margin: 0; color: #555; max-width: 32rem; line-height: 1.4; }
     #carregando #status { color: #1f4e79; font-weight: 600; }
     #carregando .nota { font-size: .9rem; }
+    #tentar { font: inherit; font-weight: 600; color: #fff; background: #1f4e79; border: 0;
+              border-radius: .5rem; padding: .7rem 1.4rem; margin-top: .5rem; }
     .gota { font-size: 3rem; animation: cair 1.2s ease-in-out infinite; }
     @keyframes cair { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(10px) } }
   </style>
@@ -77,10 +79,46 @@
     const busca = params.toString();
     history.replaceState(null, "", `${base}${busca ? "?" + busca : ""}`);
 
+    // Internet fraca: o download de algum pacote Python (ex.: pandas, o maior) pode falhar e o
+    // app quebra com ModuleNotFoundError. Recarrega sozinho (o que já baixou fica em cache);
+    // depois de 2 tentativas, mostra um botão para tentar de novo.
+    const TENTATIVAS = "alagamento-tentativas";
+    const lerTentativas = () => { try { return +sessionStorage.getItem(TENTATIVAS) || 0; } catch { return 0; } };
+    const gravarTentativas = (n) => { try { sessionStorage.setItem(TENTATIVAS, n); } catch {} };
+    function falhaNoDownload() {
+      const n = lerTentativas();
+      // No app Android, apaga o cache antes (o pacote pode ter ficado corrompido no cache)
+      const recarregar = () => {
+        try { window.AppAndroid?.limparCache(); } catch {}
+        setTimeout(() => location.replace(base), 800);
+      };
+      if (n < 2) {
+        gravarTentativas(n + 1);
+        status.textContent = "Alguns componentes não baixaram direito. Tentando de novo…";
+        recarregar();
+        return;
+      }
+      gravarTentativas(0);
+      const tela = document.createElement("div");
+      tela.id = "carregando";
+      tela.innerHTML = `<div class="gota">📶</div><h1>Conexão instável</h1>
+        <p>Não conseguimos baixar todos os componentes do app. Verifique sua internet e tente de novo.</p>
+        <button id="tentar">Tentar novamente</button>`;
+      document.body.append(tela);
+      document.getElementById("tentar").onclick = recarregar;
+    }
+
     const observer = new MutationObserver(() => {
+      const erro = document.querySelector("[data-testid='stException']");
+      if (erro && /ModuleNotFoundError/.test(erro.textContent)) {
+        observer.disconnect();
+        falhaNoDownload();
+        return;
+      }
       // Some só quando a página de verdade aparece (título ou erro), não no esqueleto do stlite
       if (document.querySelector("[data-testid='stHeading'], [data-testid='stException'], [data-testid='stAlert']")) {
         document.getElementById("carregando")?.remove();
+        gravarTentativas(0);
         observer.disconnect();
       }
     });

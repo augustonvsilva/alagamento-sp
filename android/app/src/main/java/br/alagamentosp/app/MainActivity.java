@@ -12,6 +12,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.webkit.GeolocationPermissions;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -74,6 +75,7 @@ public class MainActivity extends Activity {
 
         web.setWebViewClient(new Cliente());
         web.setWebChromeClient(new ClienteChrome());
+        web.addJavascriptInterface(new Ponte(), "AppAndroid");
 
         // Já na abertura: pede a localização para mostrar como está a área da pessoa.
         permissaoRespondida = temPermissao();
@@ -135,6 +137,18 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         if (web.canGoBack()) web.goBack();
         else super.onBackPressed();
+    }
+
+    /** Funções que o index.html pode chamar (window.AppAndroid). */
+    private class Ponte {
+        /**
+         * Apaga o cache HTTP do WebView. Usado quando um pacote Python chega corrompido (ex.: o app
+         * foi fechado no meio do download) — sem isso, recarregar reaproveitaria a cópia estragada.
+         */
+        @JavascriptInterface
+        public void limparCache() {
+            runOnUiThread(() -> web.clearCache(true));
+        }
     }
 
     private class ClienteChrome extends WebChromeClient {
