@@ -14,7 +14,6 @@
     #carregando h1 { margin: 0; font-size: 1.6rem; }
     #carregando p { margin: 0; color: #555; max-width: 32rem; line-height: 1.4; }
     #carregando #status { color: #1f4e79; font-weight: 600; }
-    #carregando .nota { font-size: .9rem; }
     #tentar { font: inherit; font-weight: 600; color: #fff; background: #1f4e79; border: 0;
               border-radius: .5rem; padding: .7rem 1.4rem; margin-top: .5rem; }
     .gota { font-size: 3rem; animation: cair 1.2s ease-in-out infinite; }
@@ -25,9 +24,7 @@
   <div id="carregando">
     <div class="gota">🌧️</div>
     <h1>Alerta Alagamento SP</h1>
-    <p id="status">📍 Permita o acesso à sua localização para mostrarmos como está a sua área.</p>
-    <p class="nota">Carregando o app… Na primeira vez isso leva de 20 a 40 segundos
-       (o Python é baixado uma única vez e fica em cache).</p>
+    <p id="status"></p>
   </div>
   <div id="root"></div>
   <script type="module">
@@ -72,9 +69,6 @@
       params.set("lat", posicao.latitude.toFixed(5));
       params.set("lon", posicao.longitude.toFixed(5));
       if (!subpagina) params.set("pagina", "minha_regiao");
-      status.textContent = "📍 Localização encontrada! Preparando a previsão da sua área…";
-    } else {
-      status.textContent = "Sem localização — você poderá buscar um endereço no app.";
     }
     const busca = params.toString();
     history.replaceState(null, "", `${base}${busca ? "?" + busca : ""}`);
