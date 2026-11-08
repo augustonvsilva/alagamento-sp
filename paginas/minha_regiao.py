@@ -60,9 +60,22 @@ ui.alerta(
      f"<b>{ui.pct(p_perto)}</b>") if len(perto) else
     f"Nenhum ponto recorrente de alagamento a até {raio} km.", nivel)
 
-a, b, c, d = st.columns(4)
-a.metric("Agora", atual["descricao"], f"{atual['temperature_2m']:.0f} °C · {atual['relative_humidity_2m']}% umidade",
+a, b, c = st.columns(3)
+a.metric("Agora", atual["descricao"], f"{atual['temperature_2m']:.0f} °C · sensação de "
+         f"{atual.get('apparent_temperature', atual['temperature_2m']):.0f} °C",
          delta_color="off", delta_arrow="off")
+b.metric("Umidade do ar", f"{atual['relative_humidity_2m']:.0f}%",
+         "ar muito seco" if atual["relative_humidity_2m"] < 30 else None, delta_color="off", delta_arrow="off")
+rajada = atual.get("wind_gusts_10m") or 0
+c.metric("Vento", f"{atual['wind_speed_10m']:.0f} km/h {atual.get('direcao', '')}".strip(),
+         f"rajadas de {rajada:.0f} km/h", delta_color="off", delta_arrow="off")
+
+rajada_max = prox24["rajada"].max() if "rajada" in prox24 else float("nan")
+if rajada_max >= 60:
+    st.warning(f"💨 Rajadas de até **{rajada_max:.0f} km/h** previstas nas próximas 24h — risco de queda de "
+               "árvores e de falta de energia. Evite ficar sob árvores e perto de fiação durante a chuva.")
+
+b, c, d = st.columns(3)
 b.metric("Chuva agora", f"{atual['precipitation']:.1f} mm")
 c.metric("Chuva prevista (24h)", f"{prox24['precip'].sum():.1f} mm",
          f"pico de {prox24['precip'].max():.1f} mm/h", delta_color="off", delta_arrow="off")

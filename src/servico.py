@@ -89,14 +89,14 @@ def rotas(o: tuple, d: tuple):
 @dataclass
 class Previsao:
     agora: pd.Timestamp
-    cel_h: pd.DataFrame      # celula, time, precip, prob, p (prob. de alagamento na célula)
+    cel_h: pd.DataFrame      # celula, time, precip, prob, umidade, vento, rajada, p (prob. na célula)
     pts_h: pd.DataFrame      # ponto, time, precip, p (prob. de alagamento no ponto)
     cel: pd.DataFrame        # resumo por célula (próximas 24h)
     pts: pd.DataFrame        # pontos + resumo (próximas 24h)
 
 
 def _prever_celulas(fc: pd.DataFrame, taxa: pd.Series) -> pd.DataFrame:
-    X = features.construir(fc[["celula", "time", "precip", "prob"]], taxa)
+    X = features.construir(fc, taxa)  # colunas extras (umidade, vento) seguem junto
     X["p"] = features.prever_json(modelo(), X)
     # Sem chuva relevante nas últimas 6h o risco é desprezível (evita ruído do modelo)
     X.loc[X["p6h"] < 0.2, "p"] = X.loc[X["p6h"] < 0.2, "p"].clip(upper=1e-4)

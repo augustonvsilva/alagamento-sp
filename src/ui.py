@@ -106,11 +106,13 @@ def legenda(horas: int = 24):
 def grafico_chuva_risco(df: pd.DataFrame, agora: pd.Timestamp, altura=260):
     """Barras de chuva (mm/h) + linha de probabilidade de alagamento, com marcador de 'agora'."""
     base = alt.Chart(df).encode(x=alt.X("time:T", title=None, axis=alt.Axis(format="%d/%m %Hh")))
+    dica = [alt.Tooltip("time:T", format="%d/%m %Hh", title="Hora"),
+            alt.Tooltip("precip:Q", format=".1f", title="Chuva (mm/h)"),
+            alt.Tooltip("p:Q", format=".1%", title="Prob. alagamento")]
+    extras = [("umidade", ".0f", "Umidade (%)"), ("vento", ".0f", "Vento (km/h)"), ("rajada", ".0f", "Rajadas (km/h)")]
+    dica += [alt.Tooltip(f"{c}:Q", format=f, title=t) for c, f, t in extras if c in df.columns]
     barras = base.mark_bar(color="#5b9bd5", opacity=0.8).encode(
-        y=alt.Y("precip:Q", title="Chuva (mm/h)"),
-        tooltip=[alt.Tooltip("time:T", format="%d/%m %Hh", title="Hora"),
-                 alt.Tooltip("precip:Q", format=".1f", title="Chuva (mm/h)"),
-                 alt.Tooltip("p:Q", format=".1%", title="Prob. alagamento")])
+        y=alt.Y("precip:Q", title="Chuva (mm/h)"), tooltip=dica)
     linha = base.mark_line(color="#c62828", strokeWidth=2.5).encode(
         y=alt.Y("p:Q", title="Prob. de alagamento (por hora)", axis=alt.Axis(format="%")))
     regra = alt.Chart(pd.DataFrame({"t": [agora]})).mark_rule(strokeDash=[4, 4], color="gray") \
