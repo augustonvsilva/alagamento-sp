@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from src import features, geo, risk, weather
+from src import features, geo, offline, risk, weather
 from src.config import MODELS, PROCESSED, TZ
 from src.grade import celula_id, id_para_coord
 
@@ -54,11 +54,32 @@ def diario() -> pd.DataFrame:
 
 # ---------------------------------------------------------------- APIs externas
 @st.cache_data(ttl=TTL_PREVISAO, show_spinner="Consultando a previsão do tempo...")
-def _previsao_bruta(ids: tuple[str, ...]) -> pd.DataFrame:
+def _previsao_online(ids: tuple[str, ...]) -> pd.DataFrame:
     coords = [id_para_coord(c) for c in ids]
     fc = weather.hourly_forecast([c[0] for c in coords], [c[1] for c in coords])
     fc["celula"] = fc["idx"].map(dict(enumerate(ids)))
-    return fc.drop(columns="idx")
+    fc = fc.drop(columns="idx")
+    offline.salvar_previsao(fc, pd.Timestamp.now(tz=TZ).tz_localize(None))  # cópia para usar sem internet
+    return fc
+
+
+def _previsao_bruta(ids: tuple[str, ...]) -> pd.DataFrame:
+    """Previsão ao vivo; sem internet, a última previsão guardada no aparelho."""
+    try:
+        return _previsao_online(ids)
+    except Exception:  # noqa: BLE001 — sem conexão (o erro varia entre navegador e Python normal)
+        salva = offline.carregar_previsao(ids)
+        if salva is None:
+            raise
+        fc, quando = salva
+        anterior = st.session_state.get("previsao_salva_em")
+        st.session_state["previsao_salva_em"] = quando if anterior is None else min(anterior, quando)
+        return fc
+
+
+def previsao_salva_em() -> pd.Timestamp | None:
+    """Quando foi baixada a previsão em uso, se o app estiver sem internet nesta execução."""
+    return st.session_state.get("previsao_salva_em")
 
 
 @st.cache_data(ttl=600)

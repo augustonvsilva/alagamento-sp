@@ -40,3 +40,37 @@ def test_minha_regiao_com_localizacao(lat, lon, usa_gps):
     if usa_gps:
         assert at.radio[0].value == "📍 Minha localização"
         assert not at.text_input  # não pede endereço: usa a posição
+
+
+@pytest.mark.parametrize("pagina", ["paginas/visao_geral.py", "paginas/minha_regiao.py"])
+def test_sem_internet_usa_previsao_salva(pagina, tmp_path, monkeypatch):
+    """Sem internet, as páginas usam a última previsão salva e avisam; sem cópia, mostram erro amigável."""
+    import requests
+    import streamlit as st
+
+    from src import offline, weather
+
+    monkeypatch.setattr(offline, "PASTA", tmp_path)
+
+    def rodar():
+        st.cache_data.clear()
+        at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+        at.session_state["minha_loc"] = (-23.5614, -46.6559)
+        at.run()
+        return at.switch_page(pagina).run()
+
+    rodar()  # com internet: guarda a previsão
+    assert (tmp_path / offline.ARQ_PREVISAO).exists()
+
+    monkeypatch.setattr(weather.requests, "get", lambda *a, **k: (_ for _ in ()).throw(requests.ConnectionError()))
+    at = rodar()
+    assert not at.exception, at.exception
+    assert any("Sem internet" in w.value for w in at.warning)
+
+    (tmp_path / offline.ARQ_PREVISAO).unlink()
+    at = rodar()
+    assert not at.exception, at.exception
+    assert any("verifique sua conexão" in e.value for e in at.error)
+    if pagina.endswith("minha_regiao.py"):  # mesmo sem previsão, mostra pontos e histórico
+        assert any(h.value.startswith("Pontos de alagamento") for h in at.subheader)
+        assert any(h.value == "Histórico da região" for h in at.subheader)

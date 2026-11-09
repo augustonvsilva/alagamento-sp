@@ -24,16 +24,26 @@ def _get(params: dict, timeout: int = 30):
     return r.json()
 
 
-def hourly_forecast(lats, lons, past_days: int = 3, forecast_days: int = 3) -> pd.DataFrame:
-    """Chuva hora a hora para vários pontos (inclui dias passados para as janelas acumuladas).
+# Variáveis horárias pedidas ao Open-Meteo -> nome da coluna no app
+HORARIAS = {
+    "precipitation": "precip", "precipitation_probability": "prob",
+    "relative_humidity_2m": "umidade", "wind_speed_10m": "vento", "wind_gusts_10m": "rajada",
+    # usadas para montar o "tempo agora" quando o app está sem internet
+    "temperature_2m": "temp", "apparent_temperature": "sensacao", "weather_code": "codigo",
+    "wind_direction_10m": "direcao_graus",
+}
 
-    Retorna colunas: idx (posição do ponto), time, precip (mm), prob (%),
-    umidade (%), vento e rajada (km/h).
+
+def hourly_forecast(lats, lons, past_days: int = 3, forecast_days: int = 3) -> pd.DataFrame:
+    """Previsão hora a hora para vários pontos (inclui dias passados para as janelas acumuladas).
+
+    Retorna colunas: idx (posição do ponto), time, precip (mm), prob (%), umidade (%),
+    vento e rajada (km/h), temp e sensacao (°C), codigo (WMO), direcao_graus.
     """
     data = _get({
         "latitude": ",".join(f"{x:.4f}" for x in lats),
         "longitude": ",".join(f"{x:.4f}" for x in lons),
-        "hourly": "precipitation,precipitation_probability,relative_humidity_2m,wind_speed_10m,wind_gusts_10m",
+        "hourly": ",".join(HORARIAS),
         "past_days": past_days, "forecast_days": forecast_days, "timezone": TZ,
     })
     if isinstance(data, dict):
@@ -41,14 +51,30 @@ def hourly_forecast(lats, lons, past_days: int = 3, forecast_days: int = 3) -> p
     frames = []
     for i, d in enumerate(data):
         h = d["hourly"]
-        frames.append(pd.DataFrame({"idx": i, "time": pd.to_datetime(h["time"]),
-                                    "precip": h["precipitation"], "prob": h["precipitation_probability"],
-                                    "umidade": h.get("relative_humidity_2m"), "vento": h.get("wind_speed_10m"),
-                                    "rajada": h.get("wind_gusts_10m")}))
+        f = pd.DataFrame({"idx": i, "time": pd.to_datetime(h["time"])})
+        for api, col in HORARIAS.items():
+            valores = h.get(api)
+            f[col] = (pd.to_numeric(pd.Series(valores, dtype="object"), errors="coerce").astype(float)
+                      if valores is not None else float("nan"))
+        frames.append(f)
     df = pd.concat(frames, ignore_index=True)
     df[["precip", "prob"]] = df[["precip", "prob"]].fillna(0).astype(float)
-    df[["umidade", "vento", "rajada"]] = df[["umidade", "vento", "rajada"]].astype(float)
     return df
+
+
+def tempo_da_previsao(linha) -> dict:
+    """'Tempo agora' (mesmo formato de current_weather) a partir de uma hora da previsão horária."""
+    def num(col, padrao=float("nan")):
+        v = linha.get(col, padrao)
+        return padrao if pd.isna(v) else float(v)
+    codigo = num("codigo")
+    return {
+        "temperature_2m": num("temp"), "apparent_temperature": num("sensacao"),
+        "relative_humidity_2m": num("umidade"), "precipitation": num("precip", 0.0),
+        "wind_speed_10m": num("vento"), "wind_gusts_10m": num("rajada"),
+        "descricao": WMO.get(None if pd.isna(codigo) else int(codigo), "—"),
+        "direcao": direcao_vento(None if pd.isna(num("direcao_graus")) else num("direcao_graus")),
+    }
 
 
 def current_weather(lat: float, lon: float) -> dict:

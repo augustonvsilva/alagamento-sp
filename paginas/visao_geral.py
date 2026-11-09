@@ -6,9 +6,10 @@ from src import risk, servico, ui
 ui.aviso_simulacao()
 try:
     prev = servico.previsao(st.session_state.get("sim"))
-except Exception as e:  # noqa: BLE001
-    st.error(f"Não foi possível obter a previsão do tempo agora. Tente novamente em instantes. ({e})")
+except Exception:  # noqa: BLE001
+    st.error(ui.SEM_INTERNET, icon="📶")
     st.stop()
+ui.aviso_offline(servico.previsao_salva_em(), prev.agora, prev.cel_h["time"].max())
 
 pts, cel = prev.pts, prev.cel
 st.title("Previsão de alagamentos — São Paulo")

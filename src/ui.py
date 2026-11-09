@@ -51,6 +51,21 @@ def aviso_simulacao():
                    "cidade. Os números abaixo **não** são a previsão real.", icon="🧪")
 
 
+SEM_INTERNET = ("Não foi possível consultar a previsão do tempo — verifique sua conexão com a internet. "
+                "Depois que o app abrir uma vez com internet, ele guarda a previsão para usar sem conexão.")
+
+
+def aviso_offline(salva_em: pd.Timestamp | None, agora: pd.Timestamp, fim_previsao: pd.Timestamp) -> None:
+    """Sem internet: avisa que a previsão é a última guardada (e para a página se ela já expirou)."""
+    if salva_em is None:
+        return
+    msg = f"**Sem internet** — usando a última previsão salva no aparelho, de {salva_em:%d/%m às %Hh%M}."
+    if fim_previsao < agora:
+        st.error(msg + " Ela já expirou: conecte-se à internet para ver o risco atual.", icon="📴")
+        st.stop()
+    st.warning(msg + " A chuva prevista pode ter mudado desde então.", icon="📴")
+
+
 def mapa(center=CENTRO_SP, zoom=11) -> folium.Map:
     return folium.Map(location=center, zoom_start=zoom, tiles="OpenStreetMap", control_scale=True)
 
@@ -76,6 +91,15 @@ def camada_celulas(m: folium.Map, cel: pd.DataFrame, col_p="p_janela"):
 
 
 def camada_pontos(m: folium.Map, pts: pd.DataFrame, col_p="p_janela"):
+    if col_p not in pts.columns:  # sem previsão (offline): só o histórico de cada ponto
+        for _, p in pts.iterrows():
+            folium.CircleMarker(
+                location=(p["lat"], p["lon"]), radius=5, color="#333", weight=0.6, fill=True,
+                fill_color="#8a8f98", fill_opacity=0.9,
+                tooltip=(f"<b>{p['nome']}</b> — {p['bairro']}<br>"
+                         f"Histórico: {p['n_eventos']} alagamentos desde {p['primeiro'][:4]}"),
+            ).add_to(m)
+        return
     for _, p in pts.sort_values(col_p).iterrows():
         nivel = risk.classificar(p[col_p])
         folium.CircleMarker(

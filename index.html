@@ -33,7 +33,7 @@
     const arquivos = [
       "app.py",
       "src/__init__.py", "src/config.py", "src/features.py", "src/geo.py", "src/grade.py",
-      "src/nomes.py", "src/risk.py", "src/servico.py", "src/ui.py", "src/weather.py",
+      "src/nomes.py", "src/offline.py", "src/risk.py", "src/servico.py", "src/ui.py", "src/weather.py",
       "paginas/visao_geral.py", "paginas/minha_regiao.py", "paginas/trajeto.py",
       "paginas/analise.py", "paginas/modelo.py",
       "models/modelo.json", "models/metricas.json",
@@ -127,6 +127,9 @@
       requirements: ["folium", "requests", "tzdata"],
       entrypoint: "app.py",
       files,
+      // Pasta guardada no armazenamento do navegador: a última previsão fica salva para o app
+      // funcionar sem internet (src/offline.py). O stlite grava ao fim de cada execução.
+      idbfsMountpoints: ["/offline"],
       streamlitConfig: {
         "theme.primaryColor": "#1f4e79",
         "theme.backgroundColor": "#ffffff",

@@ -67,4 +67,6 @@ with st.sidebar:
     st.divider()
     st.caption("Fontes: CGE/Prefeitura de SP · Open-Meteo · OpenStreetMap · OSRM")
 
+# Marcado por servico._previsao_bruta quando a página usar a previsão guardada (sem internet)
+st.session_state["previsao_salva_em"] = None
 paginas.run()

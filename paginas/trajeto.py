@@ -18,7 +18,12 @@ with st.form("form_rota"):
     enviar = st.form_submit_button("Calcular trajeto", type="primary", width="stretch")
 
 if enviar:
-    o, d = servico.geocode(origem_txt), servico.geocode(destino_txt)
+    try:
+        o, d = servico.geocode(origem_txt), servico.geocode(destino_txt)
+    except Exception:  # noqa: BLE001
+        st.error("Sem internet não dá para buscar endereços nem calcular rotas. Tente de novo com conexão.",
+                 icon="📴")
+        st.stop()
     if not o or not d:
         st.session_state.pop("rota", None)
         st.error("Não encontrei a " + ("origem." if not o else "o destino."))
@@ -36,7 +41,12 @@ if not rts:
     st.error("Nenhuma rota encontrada entre esses pontos.")
     st.stop()
 
-prev = servico.previsao(st.session_state.get("sim"))
+try:
+    prev = servico.previsao(st.session_state.get("sim"))
+except Exception:  # noqa: BLE001
+    st.error(ui.SEM_INTERNET, icon="📶")
+    st.stop()
+ui.aviso_offline(servico.previsao_salva_em(), prev.agora, prev.cel_h["time"].max())
 
 
 def risco_saida(ids, dur_min, horas=12):

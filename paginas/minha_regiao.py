@@ -2,7 +2,7 @@ import folium
 import pandas as pd
 import streamlit as st
 
-from src import geo, risk, servico, ui
+from src import geo, risk, servico, ui, weather
 from src.config import BBOX
 
 ui.aviso_simulacao()
@@ -28,7 +28,12 @@ if modo == USAR_GPS:
 else:
     end = c1.text_input("Endereço, bairro ou ponto de referência", "Praça da Sé, São Paulo",
                         placeholder="Ex.: Rua Augusta, 500")
-    loc = servico.geocode(end) if end.strip() else None
+    try:
+        loc = servico.geocode(end) if end.strip() else None
+    except Exception:  # noqa: BLE001
+        st.warning("Sem internet, a busca de endereço não funciona. "
+                   + ("Use 📍 Minha localização: o GPS funciona sem internet." if dentro_sp else ""), icon="📴")
+        st.stop()
     if not loc:
         st.info("Não encontrei esse endereço. Tente incluir o bairro ou o número.")
         st.stop()
@@ -38,71 +43,84 @@ st.caption(f"📍 {nome_end}")
 sim = st.session_state.get("sim")
 try:
     prev = servico.previsao(sim)
-    atual = servico.tempo_atual(lat, lon)
     local = servico.previsao_local(lat, lon, sim)
-except Exception as e:  # noqa: BLE001
-    st.error(f"Não foi possível consultar o tempo agora. ({e})")
-    st.stop()
+except Exception:  # noqa: BLE001 — sem internet e sem previsão guardada
+    prev = local = None
+    st.error(ui.SEM_INTERNET + " Abaixo, os pontos de alagamento e o histórico da sua região "
+             "(não dependem de internet).", icon="📶")
 
-prox24 = risk.janela(local, prev.agora, 24)
-p_regiao = risk.prob_alguma(prox24["p"])
-
-pts = prev.pts.copy()
+if prev is not None:
+    ui.aviso_offline(servico.previsao_salva_em(), prev.agora, prev.cel_h["time"].max())
+    pts = prev.pts.copy()
+else:
+    pts = servico.pontos().copy()
 pts["dist_km"] = geo.haversine_m(lat, lon, pts["lat"].values, pts["lon"].values) / 1000
-perto = pts[pts["dist_km"] <= raio].sort_values("p_janela", ascending=False)
-p_perto = risk.prob_alguma(perto["p_janela"])
-nivel = risk.pior([risk.classificar(p_perto), risk.classificar(p_regiao, "regiao")])
+perto = pts[pts["dist_km"] <= raio].sort_values("p_janela" if prev is not None else "n_eventos", ascending=False)
 
-# ------------------------------------------------ situação
-ui.alerta(
-    f"Risco {nivel.lower()} de alagamento perto de você nas próximas 24h",
-    (f"{len(perto)} ponto(s) recorrente(s) de alagamento a até {raio} km · chance de algum alagar: "
-     f"<b>{ui.pct(p_perto)}</b>") if len(perto) else
-    f"Nenhum ponto recorrente de alagamento a até {raio} km.", nivel)
+if prev is not None:
+    try:
+        atual = servico.tempo_atual(lat, lon)
+    except Exception:  # noqa: BLE001 — sem internet: "agora" vem da previsão horária guardada
+        hora = local[local["time"] == prev.agora]
+        atual = weather.tempo_da_previsao((hora if len(hora) else local).iloc[0])
 
-a, b, c = st.columns(3)
-a.metric("Agora", atual["descricao"], f"{atual['temperature_2m']:.0f} °C · sensação de "
-         f"{atual.get('apparent_temperature', atual['temperature_2m']):.0f} °C",
-         delta_color="off", delta_arrow="off")
-b.metric("Umidade do ar", f"{atual['relative_humidity_2m']:.0f}%",
-         "ar muito seco" if atual["relative_humidity_2m"] < 30 else None, delta_color="off", delta_arrow="off")
-rajada = atual.get("wind_gusts_10m") or 0
-c.metric("Vento", f"{atual['wind_speed_10m']:.0f} km/h {atual.get('direcao', '')}".strip(),
-         f"rajadas de {rajada:.0f} km/h", delta_color="off", delta_arrow="off")
+    prox24 = risk.janela(local, prev.agora, 24)
+    p_regiao = risk.prob_alguma(prox24["p"])
+    p_perto = risk.prob_alguma(perto["p_janela"])
+    nivel = risk.pior([risk.classificar(p_perto), risk.classificar(p_regiao, "regiao")])
 
-rajada_max = prox24["rajada"].max() if "rajada" in prox24 else float("nan")
-if rajada_max >= 60:
-    st.warning(f"💨 Rajadas de até **{rajada_max:.0f} km/h** previstas nas próximas 24h — risco de queda de "
-               "árvores e de falta de energia. Evite ficar sob árvores e perto de fiação durante a chuva.")
+    # ------------------------------------------------ situação
+    ui.alerta(
+        f"Risco {nivel.lower()} de alagamento perto de você nas próximas 24h",
+        (f"{len(perto)} ponto(s) recorrente(s) de alagamento a até {raio} km · chance de algum alagar: "
+         f"<b>{ui.pct(p_perto)}</b>") if len(perto) else
+        f"Nenhum ponto recorrente de alagamento a até {raio} km.", nivel)
 
-b, c, d = st.columns(3)
-b.metric("Chuva agora", f"{atual['precipitation']:.1f} mm")
-c.metric("Chuva prevista (24h)", f"{prox24['precip'].sum():.1f} mm",
-         f"pico de {prox24['precip'].max():.1f} mm/h", delta_color="off", delta_arrow="off")
-pico = prox24.loc[prox24["precip"].idxmax(), "time"] if prox24["precip"].max() > 0 else None
-d.metric("Horário de mais chuva", f"{pico:%Hh} ({pico:%d/%m})" if pico is not None else "Sem chuva")
+    a, b, c = st.columns(3)
+    a.metric("Agora", atual["descricao"], f"{atual['temperature_2m']:.0f} °C · sensação de "
+             f"{atual.get('apparent_temperature', atual['temperature_2m']):.0f} °C",
+             delta_color="off", delta_arrow="off")
+    b.metric("Umidade do ar", f"{atual['relative_humidity_2m']:.0f}%",
+             "ar muito seco" if atual["relative_humidity_2m"] < 30 else None, delta_color="off", delta_arrow="off")
+    rajada = atual.get("wind_gusts_10m") or 0
+    c.metric("Vento", f"{atual['wind_speed_10m']:.0f} km/h {atual.get('direcao', '')}".strip(),
+             f"rajadas de {rajada:.0f} km/h", delta_color="off", delta_arrow="off")
+
+    rajada_max = prox24["rajada"].max() if "rajada" in prox24 else float("nan")
+    if rajada_max >= 60:
+        st.warning(f"💨 Rajadas de até **{rajada_max:.0f} km/h** previstas nas próximas 24h — risco de queda de "
+                   "árvores e de falta de energia. Evite ficar sob árvores e perto de fiação durante a chuva.")
+
+    b, c, d = st.columns(3)
+    b.metric("Chuva agora", f"{atual['precipitation']:.1f} mm")
+    c.metric("Chuva prevista (24h)", f"{prox24['precip'].sum():.1f} mm",
+             f"pico de {prox24['precip'].max():.1f} mm/h", delta_color="off", delta_arrow="off")
+    pico = prox24.loc[prox24["precip"].idxmax(), "time"] if prox24["precip"].max() > 0 else None
+    d.metric("Horário de mais chuva", f"{pico:%Hh} ({pico:%d/%m})" if pico is not None else "Sem chuva")
 
 # ------------------------------------------------ mapa e previsão
-col_m, col_g = st.columns([3, 2], gap="medium")
+col_m, col_g = st.columns([3, 2], gap="medium") if prev is not None else (st.container(), None)
 with col_m:
     m = ui.mapa((lat, lon), 14 if raio <= 1 else 13)
     folium.Marker((lat, lon), tooltip="Você está aqui", icon=folium.Icon(color="blue", icon="home")).add_to(m)
     folium.Circle((lat, lon), radius=raio * 1000, color=ui.AZUL, fill=False, weight=1.5).add_to(m)
     ui.camada_pontos(m, perto)
     ui.mostrar_mapa(m, 460)
-with col_g:
-    st.markdown("**Previsão para a sua região**")
-    serie = local[(local["time"] >= prev.agora - pd.Timedelta(hours=6))
-                  & (local["time"] < prev.agora + pd.Timedelta(hours=36))]
-    st.altair_chart(ui.grafico_chuva_risco(serie, prev.agora, 300), width="stretch")
-    st.caption("Barras: chuva prevista. Linha: probabilidade de alagamento na região (~11 km) a cada hora.")
+if col_g is not None:
+    with col_g:
+        st.markdown("**Previsão para a sua região**")
+        serie = local[(local["time"] >= prev.agora - pd.Timedelta(hours=6))
+                      & (local["time"] < prev.agora + pd.Timedelta(hours=36))]
+        st.altair_chart(ui.grafico_chuva_risco(serie, prev.agora, 300), width="stretch")
+        st.caption("Barras: chuva prevista. Linha: probabilidade de alagamento na região (~11 km) a cada hora.")
 
 # ------------------------------------------------ pontos próximos e histórico
 st.subheader(f"Pontos de alagamento a até {raio} km")
 if perto.empty:
     st.write("Nenhum ponto recorrente registrado pelo CGE nesse raio.")
 else:
-    st.dataframe(perto[["nome", "bairro", "dist_km", "p_janela", "hora_pico", "n_eventos", "ultimo"]],
+    colunas = ["nome", "bairro", "dist_km", "p_janela", "hora_pico", "n_eventos", "ultimo"]
+    st.dataframe(perto[[c for c in colunas if c in perto.columns]],
                  hide_index=True, width="stretch",
                  column_config={
                      "nome": "Local", "bairro": "Bairro",

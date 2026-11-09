@@ -51,6 +51,7 @@ public class MainActivity extends Activity {
     }
 
     private WebView web;
+    private CacheWeb cache;
     // Pedido de geolocalização do WebView aguardando a resposta da permissão do Android
     private GeolocationPermissions.Callback geoCallback;
     private String geoOrigem;
@@ -61,6 +62,7 @@ public class MainActivity extends Activity {
         super.onCreate(estado);
         getWindow().setStatusBarColor(Color.parseColor("#1f4e79"));
 
+        cache = new CacheWeb(this);
         web = new WebView(this);
         web.setBackgroundColor(Color.WHITE);
         setContentView(web);
@@ -147,6 +149,7 @@ public class MainActivity extends Activity {
          */
         @JavascriptInterface
         public void limparCache() {
+            cache.limpar();
             runOnUiThread(() -> web.clearCache(true));
         }
     }
@@ -181,7 +184,8 @@ public class MainActivity extends Activity {
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest req) {
             Uri u = req.getUrl();
-            if (!HOST.equals(u.getHost())) return null;  // CDN, APIs de tempo etc.: rede normal
+            // CDN, pacotes Python, mapa: cache permanente (app offline). APIs de tempo etc.: rede normal
+            if (!HOST.equals(u.getHost())) return cache.responder(req);
             String caminho = u.getPath() == null ? "" : u.getPath().replaceFirst("^/+", "");
             if (caminho.isEmpty()) caminho = "index.html";
             InputStream in = abrir(caminho);

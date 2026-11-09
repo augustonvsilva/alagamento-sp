@@ -1,3 +1,5 @@
+import java.security.MessageDigest
+
 plugins {
     id "com.android.application"
 }
@@ -18,6 +20,48 @@ tasks.register("copiarApp", Sync) {
     into pastaWeb.map { it.dir("www") }
 }
 
+// Python, pacotes e bibliotecas que o app baixaria ao abrir: vêm dentro do APK para ele funcionar
+// sem internet desde a primeira vez. Lista em semente.txt; cada arquivo é gravado com o nome =
+// SHA-256 do endereço (mesma regra do CacheWeb.java) + um .meta com o tipo do conteúdo.
+def pastaSemente = layout.buildDirectory.dir("semente-assets")
+
+tasks.register("baixarSemente") {
+    def lista = file("semente.txt")
+    def saida = pastaSemente.get().dir("semente").asFile
+    inputs.file(lista)
+    outputs.dir(saida)
+    doLast {
+        saida.mkdirs()
+        def urls = lista.readLines()*.trim().findAll { it && !it.startsWith("#") }
+        urls.each { url ->
+            def chave = MessageDigest.getInstance("SHA-256").digest(url.getBytes("UTF-8")).encodeHex().toString()
+            def arq = new File(saida, chave)
+            def meta = new File(saida, chave + ".meta")
+            if (arq.exists() && meta.exists()) return  // já baixado num build anterior
+            def c = (HttpURLConnection) new URL(url).openConnection()
+            c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) alagamento-sp-build")
+            // O micropip pede o índice do PyPI em JSON
+            if (url.contains("pypi.org/simple")) c.setRequestProperty("Accept", "application/vnd.pypi.simple.v1+json")
+            c.connectTimeout = 30000
+            c.readTimeout = 180000
+            if (c.responseCode != 200) throw new GradleException("HTTP ${c.responseCode} ao baixar ${url}")
+            def tmp = new File(saida, chave + ".tmp")
+            c.inputStream.withStream { entrada -> tmp.withOutputStream { it << entrada } }
+            def esperado = c.contentLengthLong
+            if (esperado >= 0 && tmp.length() != esperado) throw new GradleException("download incompleto: ${url}")
+            def props = new Properties()
+            props.setProperty("url", url)
+            props.setProperty("tipo", c.contentType ?: "application/octet-stream")
+            meta.withOutputStream { props.store(it, null) }
+            if (!tmp.renameTo(arq)) throw new GradleException("falha ao gravar ${arq}")
+        }
+        // Remove sobras de versões antigas da lista
+        def validos = urls.collect { MessageDigest.getInstance("SHA-256").digest(it.getBytes("UTF-8")).encodeHex().toString() } as Set
+        saida.listFiles().each { f -> if (!validos.contains(f.name.replace(".meta", ""))) f.delete() }
+        println "Semente offline: ${urls.size()} arquivos"
+    }
+}
+
 android {
     namespace "br.alagamentosp.app"
     compileSdk 35
@@ -26,8 +70,8 @@ android {
         applicationId "br.alagamentosp.app"
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
     }
 
     // Chave de assinatura: fica só na máquina de quem publica (assinatura.jks + assinatura.properties,
@@ -54,7 +98,7 @@ android {
     }
 
     sourceSets {
-        main.assets.srcDirs += pastaWeb
+        main.assets.srcDirs += [pastaWeb, pastaSemente]
     }
 
     compileOptions {
@@ -63,4 +107,4 @@ android {
     }
 }
 
-tasks.named("preBuild") { dependsOn "copiarApp" }
+tasks.named("preBuild") { dependsOn "copiarApp", "baixarSemente" }

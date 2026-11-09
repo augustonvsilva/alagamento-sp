@@ -114,3 +114,26 @@ def test_simulacao_so_altera_janela():
     fc = pd.DataFrame({"time": t, "precip": 0.0, "prob": 0.0})
     s = risk.simular_chuva(fc, t[2], 30, 2)
     assert s["precip"].tolist() == [0, 0, 30, 30, 0, 0]
+
+
+def test_offline_salvar_e_carregar(tmp_path, monkeypatch):
+    from src import offline
+    monkeypatch.setattr(offline, "PASTA", tmp_path)
+    assert offline.carregar_previsao(["a"]) is None
+    t = pd.date_range("2026-11-07", periods=3, freq="h")
+    fc = lambda cel, v: pd.DataFrame({"celula": cel, "time": t, "precip": v})  # noqa: E731
+    offline.salvar_previsao(pd.concat([fc("a", 1.0), fc("b", 2.0)]), pd.Timestamp("2026-11-07 10:00"))
+    offline.salvar_previsao(fc("b", 5.0), pd.Timestamp("2026-11-07 11:00"))  # substitui só a célula b
+    df, quando = offline.carregar_previsao(["a", "b"])
+    assert len(df) == 6 and quando == pd.Timestamp("2026-11-07 10:00")
+    assert df.loc[df["celula"] == "b", "precip"].eq(5.0).all()
+    assert offline.carregar_previsao(["c"]) is None
+
+
+def test_tempo_da_previsao():
+    from src.weather import direcao_vento, tempo_da_previsao
+    atual = tempo_da_previsao(pd.Series({"temp": 21.0, "sensacao": 23.0, "umidade": 80, "precip": 0.4,
+                                         "vento": 12.0, "rajada": 40.0, "codigo": 61, "direcao_graus": 180}))
+    assert atual["descricao"] == "Chuva fraca" and atual["direcao"] == "S"
+    assert atual["relative_humidity_2m"] == 80
+    assert direcao_vento(350) == "N" and direcao_vento(None) == ""

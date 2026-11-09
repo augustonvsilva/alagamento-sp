@@ -6,3 +6,6 @@ __pycache__/
 data/raw/cge_dias/
 data/raw/chuva/
 data/processed/chuva_horaria.parquet
+
+# Previsão guardada para uso offline (src/offline.py)
+.cache/
