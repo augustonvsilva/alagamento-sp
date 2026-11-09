@@ -1,9 +1,28 @@
+# Identidade visual — mantenha igual ao `streamlitConfig` do index.html (versão web/APK).
 [theme]
-primaryColor = "#1f4e79"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f2f5f9"
-textColor = "#1b1f24"
-font = "sans serif"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap, sans-serif"
+headingFontWeights = [800, 700, 700, 600, 600, 600]
+baseRadius = "0.75rem"
+buttonRadius = "full"
+showWidgetBorder = true
+showSidebarBorder = true
+chartCategoricalColors = ["#0E5FA8", "#5AA9E6", "#E8710A", "#2E9E5B", "#D93025", "#7A5AF8"]
+
+[theme.light]
+primaryColor = "#0E5FA8"
+backgroundColor = "#F5F7FA"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F1B2D"
+borderColor = "#E2E8F0"
+linkColor = "#0E5FA8"
+
+[theme.dark]
+primaryColor = "#5AA9E6"
+backgroundColor = "#0B1220"
+secondaryBackgroundColor = "#131C2E"
+textColor = "#E6EDF5"
+borderColor = "#24324A"
+linkColor = "#7DBBEE"
 
 [server]
 headless = true

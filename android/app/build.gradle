@@ -12,7 +12,7 @@ def pastaWeb = layout.buildDirectory.dir("web-assets")
 tasks.register("copiarApp", Sync) {
     from(raiz) {
         include "index.html", "app.py"
-        include "src/*.py", "paginas/*.py"
+        include "src/*.py", "paginas/*.py", "assets/*.svg"
         include "models/*.json"
         include "data/processed/alagamentos_geo.parquet", "data/processed/celulas.parquet"
         include "data/processed/diario.parquet", "data/processed/pontos.parquet"

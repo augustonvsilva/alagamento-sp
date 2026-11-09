@@ -247,5 +247,34 @@
       "chuva_mm_h": 60.0,
       "prob": 0.20628334096375045
     }
-  ]
+  ],
+  "experimento_clima": {
+    "resultados": {
+      "Só chuva (atual)": {
+        "roc_auc": 0.9283865061126115,
+        "pr_auc": 0.04557561864136185,
+        "brier": 0.0019317571220460311,
+        "taxa_base": 0.0019515392955296135
+      },
+      "Chuva + umidade e vento": {
+        "roc_auc": 0.9255154948544059,
+        "pr_auc": 0.04921822632242574,
+        "brier": 0.001927884331362475,
+        "taxa_base": 0.0019515392955296135
+      }
+    },
+    "ganho_pr_auc": 0.07992448132690999,
+    "ganho_ic90": [
+      0.01393556191289849,
+      0.1429946391565067
+    ],
+    "prob_ganho_positivo": 0.98,
+    "coef_padronizado": {
+      "Umidade do ar": -0.06814517342636328,
+      "Vento": -0.1639017803169473,
+      "Rajadas de vento": -0.0872150531931433
+    },
+    "n_horas": 1166489,
+    "positivos_teste": 387
+  }
 }

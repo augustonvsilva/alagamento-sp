@@ -23,9 +23,9 @@ USER_AGENT = "alagamento-sp/1.0 (projeto academico de analise de dados)"
 # naturalmente mais provável. Limiares definidos a partir da distribuição das previsões
 # do modelo em cenários de chuva fraca, moderada e forte.
 NIVEIS = [
-    (0.02, "Baixo", "#2e7d32"),
-    (0.05, "Moderado", "#f9a825"),
-    (0.15, "Alto", "#ef6c00"),
-    (float("inf"), "Muito alto", "#c62828"),
+    (0.02, "Baixo", "#2E9E5B"),
+    (0.05, "Moderado", "#E0A100"),
+    (0.15, "Alto", "#E8710A"),
+    (float("inf"), "Muito alto", "#D93025"),
 ]
 LIMIARES_REGIAO = [0.10, 0.30, 0.60, float("inf")]

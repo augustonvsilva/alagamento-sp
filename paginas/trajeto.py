@@ -5,10 +5,9 @@ import streamlit as st
 
 from src import risk, servico, ui
 
+ui.cabecalho("Trajeto seguro", "Compara as rotas, procura desvios dos pontos de risco e mostra o melhor "
+             "horário para sair.", sobre="Trajeto")
 ui.aviso_simulacao()
-st.title("Trajeto seguro")
-st.caption("Compara as rotas possíveis e mostra a chance de passar por um ponto alagado — "
-           "e qual o melhor horário para sair.")
 
 with st.form("form_rota"):
     c1, c2 = st.columns(2)
@@ -82,9 +81,9 @@ tab["_ordem"] = (tab["p_agora"] / 0.02).round()
 melhor = tab.sort_values(["_ordem", "dur"]).iloc[0]
 nivel = risk.classificar(melhor["p_agora"])
 
-ui.alerta(f"Recomendado: {melhor['Rota']} — {melhor['dist']:.1f} km, ~{melhor['dur']:.0f} min",
-          f"Chance de encontrar um ponto alagado saindo agora: <b>{ui.pct(melhor['p_agora'])}</b> · "
-          f"{melhor['n_pontos']} ponto(s) de alagamento recorrente(s) no caminho.", nivel)
+ui.cartao_risco(nivel, f"Recomendado: {melhor['Rota']} — {melhor['dist']:.1f} km, ~{melhor['dur']:.0f} min",
+                f"Chance de encontrar um ponto alagado saindo agora: <b>{ui.pct(melhor['p_agora'])}</b> · "
+                f"{melhor['n_pontos']} ponto(s) de alagamento recorrente(s) no caminho.", rotulo="Trajeto")
 
 st.dataframe(tab[["Rota", "dist", "dur", "n_pontos", "p_agora"]], hide_index=True, width="stretch",
              column_config={"dist": st.column_config.NumberColumn("Distância", format="%.1f km"),

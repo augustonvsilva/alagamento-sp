@@ -9,7 +9,8 @@ from folium.plugins import HeatMap
 from src import servico, ui
 from src.nomes import expandir
 
-st.title("Análise histórica dos alagamentos")
+ui.cabecalho("Análise histórica dos alagamentos", "O que os registros do CGE mostram: quando, onde e "
+             "com quanta chuva a cidade alaga.", sobre="Dados")
 ev = servico.eventos().copy()
 ev["dt"] = pd.to_datetime(ev["data"])
 ev["ano"] = ev["dt"].dt.year
@@ -49,7 +50,7 @@ with c1:
 with c2:
     st.markdown("**Hora do dia:** pico no fim da tarde (chuvas convectivas)")
     h = ev.dropna(subset=["hora"]).groupby("hora").size().reindex(range(24), fill_value=0).reset_index(name="n")
-    st.altair_chart(alt.Chart(h).mark_bar(color="#c62828").encode(
+    st.altair_chart(alt.Chart(h).mark_bar(color=ui.VERMELHO).encode(
         x=alt.X("hora:O", title="Hora de início", axis=alt.Axis(labelAngle=0)),
         y=alt.Y("n:Q", title="Alagamentos", axis=alt.Axis(format="d")),
         tooltip=["hora", "n"]
@@ -83,7 +84,7 @@ if len(dd):
         media=("alagamentos", "mean")).reset_index()
     c1, c2 = st.columns([3, 2])
     with c1:
-        st.altair_chart(alt.Chart(g).mark_bar(color="#c62828").encode(
+        st.altair_chart(alt.Chart(g).mark_bar(color=ui.VERMELHO).encode(
             x=alt.X("faixa:N", sort=rot, title="Chuva no dia, na região mais chuvosa da cidade (mm)",
                     axis=alt.Axis(labelAngle=0)),
             y=alt.Y("com_alag:Q", title="Dias com pelo menos 1 alagamento", axis=alt.Axis(format="%")),

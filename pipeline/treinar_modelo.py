@@ -65,7 +65,7 @@ CLIMA = ["umidade", "vento", "rajada"]
 NOMES_CLIMA = {"umidade": "Umidade do ar", "vento": "Vento", "rajada": "Rajadas de vento"}
 
 
-def experimento_clima(df: pd.DataFrame, clima: pd.DataFrame, corte: pd.Timestamp) -> dict:
+def experimento_clima(df: pd.DataFrame, clima: pd.DataFrame, corte: pd.Timestamp, n_boot: int = 300) -> dict:
     """Umidade do ar e vento ajudam a prever alagamentos além da chuva?
 
     Treina a mesma regressão logística com e sem as 3 variáveis, nas MESMAS horas e com a
@@ -75,13 +75,31 @@ def experimento_clima(df: pd.DataFrame, clima: pd.DataFrame, corte: pd.Timestamp
     d[CLIMA] = d.groupby("celula")[CLIMA].transform(lambda s: s.interpolate(limit=3))  # buracos curtos
     d = d.dropna(subset=CLIMA)
     tr, te = d[d["time"] < corte], d[d["time"] >= corte]
-    res, coefs = {}, {}
+    res, coefs, preds = {}, {}, {}
     for nome, feats in (("Só chuva (atual)", FEATURES), ("Chuva + umidade e vento", FEATURES + CLIMA)):
         m, delta = treinar(make_pipeline(StandardScaler(), LogisticRegression(C=1.0, max_iter=2000)), tr, feats)
-        res[nome] = metricas(te["y"], prever(m, delta, te, feats))
+        preds[nome] = prever(m, delta, te, feats)
+        res[nome] = metricas(te["y"], preds[nome])
         coefs[nome] = dict(zip(feats, m.steps[-1][1].coef_[0].tolist()))
     a, b = res["Só chuva (atual)"]["pr_auc"], res["Chuva + umidade e vento"]["pr_auc"]
+
+    # O ganho é real ou acaso? Bootstrap sorteando DIAS do teste (horas do mesmo dia não são
+    # independentes: uma tempestade gera vários alagamentos).
+    rng = np.random.default_rng(SEED)
+    dia = te["time"].dt.floor("D").to_numpy()
+    dias = np.unique(dia)
+    idx_dia = {d: np.flatnonzero(dia == d) for d in dias}
+    y, p1, p2 = te["y"].to_numpy(), preds["Só chuva (atual)"], preds["Chuva + umidade e vento"]
+    ganhos = []
+    for _ in range(n_boot):
+        ii = np.concatenate([idx_dia[d] for d in rng.choice(dias, len(dias))])
+        if y[ii].sum() == 0:
+            continue
+        ganhos.append(average_precision_score(y[ii], p2[ii]) / average_precision_score(y[ii], p1[ii]) - 1)
+    ganhos = np.array(ganhos)
     return {"resultados": res, "ganho_pr_auc": float(b / a - 1),
+            "ganho_ic90": [float(np.quantile(ganhos, 0.05)), float(np.quantile(ganhos, 0.95))],
+            "prob_ganho_positivo": float((ganhos > 0).mean()),
             "coef_padronizado": {NOMES_CLIMA[k]: coefs["Chuva + umidade e vento"][k] for k in CLIMA},
             "n_horas": int(len(d)), "positivos_teste": int(te["y"].sum())}
 

@@ -36,9 +36,9 @@ def test_minha_regiao_com_localizacao(lat, lon, usa_gps):
     assert at.session_state["minha_loc"] == (lat, lon)
     at.switch_page("paginas/minha_regiao.py").run()
     assert not at.exception, at.exception
-    assert (len(at.radio) == 1) == usa_gps
+    assert (len(at.button_group) == 1) == usa_gps
     if usa_gps:
-        assert at.radio[0].value == "📍 Minha localização"
+        assert at.button_group[0].value == "📍 Minha localização"
         assert not at.text_input  # não pede endereço: usa a posição
 
 

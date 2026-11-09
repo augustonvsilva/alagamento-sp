@@ -3,6 +3,8 @@ import streamlit as st
 
 from src import ao_vivo, risk, servico, ui
 
+ui.cabecalho("Alagamentos em São Paulo", "Previsão para as próximas 24 horas, a partir da chuva prevista e "
+             "do histórico do CGE.", sobre="Visão geral")
 ui.aviso_simulacao()
 try:
     prev = servico.previsao(st.session_state.get("sim"))
@@ -12,28 +14,41 @@ except Exception:  # noqa: BLE001
 ui.aviso_offline(servico.previsao_salva_em(), prev.agora, prev.cel_h["time"].max())
 
 pts, cel = prev.pts, prev.cel
-st.title("Previsão de alagamentos — São Paulo")
-st.caption(f"Próximas 24 horas a partir de {prev.agora:%d/%m/%Y %Hh}. "
-           f"{len(pts)} pontos com histórico recorrente de alagamento monitorados.")
+hoje = servico.alagamentos_hoje()
 
-# ------------------------------------------------ indicadores
+# ------------------------------------------------ situação da cidade
 p_cidade = risk.prob_alguma(cel["p_janela"])
 fut = risk.janela(prev.cel_h, prev.agora, 24)
 n_alto = int((pts["nivel"].map(risk.ORDEM) >= risk.ORDEM["Alto"]).sum())
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Chance de alagar em SP", ui.pct(p_cidade),
-          help="Chance de pelo menos um alagamento em algum lugar da cidade nas próximas 24h")
-c2.metric("Pontos em risco alto ou muito alto", n_alto)
-c3.metric("Maior chuva prevista em 1h", f"{fut['precip'].max():.1f} mm")
-c4.metric("Chuva média prevista em 24h", f"{fut.groupby('celula')['precip'].sum().mean():.1f} mm")
+n_mod = int((pts["nivel"] == "Moderado").sum())
+nivel_cidade = risk.pior(pts["nivel"])
+if n_alto:
+    titulo = f"{n_alto} ponto(s) com risco alto de alagar nas próximas 24h"
+elif n_mod:
+    titulo = f"{n_mod} ponto(s) com risco moderado nas próximas 24h"
+else:
+    titulo = "Nenhum ponto com risco relevante nas próximas 24h"
+ui.cartao_risco(nivel_cidade, titulo,
+                f"Chance de algum alagamento em algum lugar da cidade: <b>{ui.pct(p_cidade)}</b>. "
+                f"{len(pts)} pontos com histórico de alagamento monitorados · previsão a partir de "
+                f"{prev.agora:%d/%m %Hh}.", rotulo="Cidade")
+
+n_hoje = "—" if hoje is None else str(len(hoje[0]))
+ativos_hoje = 0 if hoje is None else int(hoje[0]["ativo"].sum()) if len(hoje[0]) else 0
+ui.blocos([
+    ("Chance de alagar em SP", ui.pct(p_cidade), "próximas 24h"),
+    ("Pontos em risco alto", str(n_alto), f"{n_mod} em risco moderado"),
+    ("Maior chuva em 1h", f"{fut['precip'].max():.1f} mm", "prevista nas próximas 24h"),
+    ("Chuva média em 24h", f"{fut.groupby('celula')['precip'].sum().mean():.1f} mm", "média das regiões"),
+    ("Alagamentos hoje", n_hoje, (f"{ativos_hoje} ativo(s) agora" if ativos_hoje else "nenhum ativo agora")
+     if hoje is not None else "CGE indisponível"),
+])
 
 # ------------------------------------------------ alertas
 top = pts.sort_values("p_janela", ascending=False)
 criticos = top[top["nivel"].map(risk.ORDEM) >= risk.ORDEM["Moderado"]].head(5)
-if criticos.empty:
-    ui.alerta("Sem alertas relevantes", "Nenhum ponto monitorado com risco moderado ou maior nas "
-              "próximas 24 horas.", "Baixo")
-else:
+if len(criticos):
+    st.subheader("Pontos com mais risco")
     for _, p in criticos.iterrows():
         ui.alerta(f"{p['nome']} — {p['bairro']}",
                   f"Chance de alagar: <b>{ui.pct(p['p_janela'])}</b> "
@@ -43,7 +58,6 @@ else:
 
 # ------------------------------------------------ alagamentos de hoje (CGE, ao vivo)
 st.subheader("Alagamentos hoje (CGE, ao vivo)")
-hoje = servico.alagamentos_hoje()
 if hoje is None:
     st.caption("Não foi possível consultar os alagamentos de hoje no CGE agora.")
 else:
@@ -94,15 +108,16 @@ st.dataframe(
     })
 
 # ------------------------------------------------ detalhe de um ponto
-st.subheader("Previsão hora a hora")
+st.subheader("Previsão hora a hora de um local")
 escolha = st.selectbox("Escolha um local", top["nome"] + " — " + top["bairro"])
 ponto = top.iloc[(top["nome"] + " — " + top["bairro"]).tolist().index(escolha)]
 serie = prev.pts_h[(prev.pts_h["ponto"] == ponto["ponto"])
                    & (prev.pts_h["time"] >= prev.agora - pd.Timedelta(hours=12))
                    & (prev.pts_h["time"] < prev.agora + pd.Timedelta(hours=48))]
 st.altair_chart(ui.grafico_chuva_risco(serie, prev.agora), width="stretch")
-a, b, c, d = st.columns(4)
-a.metric("Chance de alagar (24h)", ui.pct(ponto["p_janela"]))
-b.metric("Alagamentos registrados", int(ponto["n_eventos"]))
-c.metric("Já ficou intransitável", ui.pct(ponto["frac_intransitavel"]), help="Fração dos eventos")
-d.metric("Duração média", f"{ponto['duracao_media_min']:.0f} min" if pd.notna(ponto["duracao_media_min"]) else "—")
+ui.blocos([
+    ("Chance de alagar (24h)", ui.pct(ponto["p_janela"]), risk.vezes_normal(ponto["p_janela"], ponto["p_normal"])),
+    ("Alagamentos registrados", str(int(ponto["n_eventos"])), f"desde {ponto['primeiro'][:4]}"),
+    ("Já ficou intransitável", ui.pct(ponto["frac_intransitavel"]), "dos alagamentos"),
+    ("Duração média", f"{ponto['duracao_media_min']:.0f} min" if pd.notna(ponto["duracao_media_min"]) else "—", ""),
+])

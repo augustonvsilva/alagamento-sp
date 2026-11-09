@@ -5,7 +5,8 @@ import streamlit as st
 from src import servico, ui
 
 met = servico.metricas()
-st.title("Como o modelo funciona")
+ui.cabecalho("Como o modelo funciona", "Dados, validação e limites da previsão — para entender o que "
+             "as porcentagens do app querem dizer.", sobre="Modelo")
 
 
 def n(x: int) -> str:
@@ -66,7 +67,7 @@ with c1:
     lim = float(max(cal["prevista"].max(), cal["observada"].max()) * 1.1)
     diag = alt.Chart(pd.DataFrame({"x": [0, lim], "y": [0, lim]})).mark_line(
         strokeDash=[4, 4], color="gray").encode(x="x:Q", y="y:Q")
-    pts = alt.Chart(cal).mark_line(point=True, color="#c62828").encode(
+    pts = alt.Chart(cal).mark_line(point=True, color=ui.VERMELHO).encode(
         x=alt.X("prevista:Q", title="Probabilidade prevista", axis=alt.Axis(format="%"), scale=alt.Scale(domain=[0, lim])),
         y=alt.Y("observada:Q", title="Frequência observada", axis=alt.Axis(format="%"), scale=alt.Scale(domain=[0, lim])),
         tooltip=[alt.Tooltip("prevista:Q", format=".2%"), alt.Tooltip("observada:Q", format=".2%"), "n:Q"])
@@ -88,7 +89,7 @@ with c2:
 st.markdown("**Resposta do modelo à chuva:** probabilidade por hora numa região típica, às 17h, "
             "com chuva constante")
 resp = pd.DataFrame(met["resposta_chuva"])
-st.altair_chart(alt.Chart(resp).mark_line(color="#c62828", strokeWidth=3).encode(
+st.altair_chart(alt.Chart(resp).mark_line(color=ui.VERMELHO, strokeWidth=3).encode(
     x=alt.X("chuva_mm_h:Q", title="Chuva (mm/h, mantida por 6h)"),
     y=alt.Y("prob:Q", title="Probabilidade de alagamento na hora", axis=alt.Axis(format="%")),
     tooltip=[alt.Tooltip("chuva_mm_h:Q", title="mm/h"), alt.Tooltip("prob:Q", format=".1%")]
@@ -108,9 +109,22 @@ else:
                                 "brier": st.column_config.NumberColumn("Brier", format="%.5f")})
     g = exp["ganho_pr_auc"]
     coef = ", ".join(f"{k}: {v:+.2f}" for k, v in exp["coef_padronizado"].items())
-    if g >= 0.05:
-        conclusao = (f"Umidade e vento **melhoram** a previsão ({g:+.1%} de PR-AUC no teste). "
-                     "Pela regra de parcimônia (≥ 5%), passam a ser candidatos para o modelo do app.")
+    ic = exp.get("ganho_ic90")
+    txt_ic = (f" (intervalo de 90%: {ic[0]:+.0%} a {ic[1]:+.0%}; ganho positivo em "
+              f"{exp['prob_ganho_positivo']:.0%} dos sorteios)") if ic else ""
+    sinais_negativos = all(v < 0 for v in exp["coef_padronizado"].values())
+    if g >= 0.05 and ic and ic[0] > 0:
+        conclusao = (f"Umidade e vento trazem uma **melhora pequena, mas consistente**: {g:+.1%} de PR-AUC no "
+                     f"teste{txt_ic}. Por outro lado, o ROC-AUC quase não muda"
+                     + (" e os coeficientes têm sinal pouco intuitivo (mais umidade e mais vento → *menos* "
+                        "alagamento, com a mesma chuva). Isso sugere que essas variáveis estão captando o "
+                        "**tipo de tempestade** (frentes frias com vento × pancadas de verão, que alagam mais), "
+                        "e não uma causa do alagamento." if sinais_negativos else ".")
+                     + " **Decisão:** por enquanto mantivemos o modelo só com chuva, mais simples e fácil de "
+                       "explicar; as novas variáveis ficam como candidatas, reavaliadas a cada atualização mensal.")
+    elif g >= 0.05:
+        conclusao = (f"Umidade e vento melhoraram {g:+.1%} o PR-AUC{txt_ic}, mas o intervalo inclui zero: "
+                     "o ganho pode ser acaso. Mantivemos o modelo só com chuva.")
     else:
         conclusao = (f"Umidade e vento **não melhoram o suficiente** ({g:+.1%} de PR-AUC no teste, abaixo "
                      "dos 5% exigidos). Mantivemos o modelo só com chuva: mais simples e igual de bom. "

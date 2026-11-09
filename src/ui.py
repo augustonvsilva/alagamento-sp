@@ -9,21 +9,90 @@ import streamlit as st
 from src import risk
 from src.config import CENTRO_SP, PASSO_GRADE
 
-AZUL = "#1f4e79"
+AZUL = "#0E5FA8"      # cor principal (mesma do tema)
+AGUA = "#5AA9E6"      # chuva nos gráficos
+VERMELHO = "#D93025"  # probabilidade / destaque
 
 
 def css():
+    """Estilo dos componentes próprios. Usa cores com transparência para funcionar
+    tanto no tema claro quanto no escuro (o Streamlit escolhe pelo aparelho)."""
     st.markdown("""
     <style>
-      .block-container {padding-top: 1.6rem; padding-bottom: 2rem;}
-      [data-testid="stMetricValue"] {font-size: 1.6rem;}
-      .badge {display:inline-block; padding:.15rem .6rem; border-radius:999px; color:#fff;
-              font-weight:600; font-size:.85rem;}
-      .alerta {border-left:6px solid; padding:.7rem 1rem; border-radius:.4rem;
-               background:rgba(127,127,127,.08); margin-bottom:.6rem;}
-      .alerta b {font-size:1.05rem;}
-      .muted {opacity:.7; font-size:.85rem;}
+      /* Fonte Inter. No Streamlit local ela vem do tema (config.toml); no stlite (web/APK) a fonte
+         por URL no tema quebra a página, então é carregada aqui. Ícones (Material) ficam de fora. */
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+      .stApp :where(p, li, a, label, input, textarea, button, h1, h2, h3, h4, h5, h6, td, th, div, span):not([data-testid="stIconMaterial"]) {
+        font-family: Inter, "Segoe UI", system-ui, sans-serif;}
+      .block-container {padding-top: 1.2rem; padding-bottom: 3rem; max-width: 1180px;}
+      h2, h3 {letter-spacing: -.01em;}
+      [data-testid="stMetricValue"] {font-size: 1.5rem; font-weight: 700;}
+      .badge {display:inline-block; padding:.12rem .6rem; border-radius:999px; color:#fff;
+              font-weight:600; font-size:.8rem;}
+      .muted {opacity:.65; font-size:.85rem;}
+
+      /* Cabeçalho da página */
+      .ap-cab {margin: .2rem 0 1rem;}
+      .ap-cab .ap-sobre {font-size:.78rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+                         color:#0E5FA8; opacity:.9;}
+      .ap-cab .ap-t {font-size: clamp(1.55rem, 4.2vw, 2.25rem); font-weight:800; letter-spacing:-.025em;
+                     line-height:1.15; margin:.15rem 0 0;}
+      .ap-cab .ap-s {opacity:.65; font-size:.95rem; margin-top:.35rem; line-height:1.4;}
+
+      /* Cartão principal de risco */
+      .ap-hero {border-radius: 1.1rem; padding: 1.05rem 1.2rem; display:flex; gap:.95rem;
+                align-items:flex-start; border:1px solid; margin:.2rem 0 1rem;}
+      .ap-hero .ap-ic {font-size:2rem; line-height:1; margin-top:.15rem;}
+      .ap-hero .ap-n {font-size:.75rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em;}
+      .ap-hero .ap-tt {font-size:1.22rem; font-weight:700; margin:.1rem 0 .3rem; line-height:1.3;}
+      .ap-hero .ap-x {opacity:.85; font-size:.93rem; line-height:1.45;}
+
+      /* Grade de indicadores */
+      .ap-grade {display:grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap:.65rem;
+                 margin:.2rem 0 1.1rem;}
+      .ap-bloco {border-radius:.95rem; padding:.8rem .95rem; background:rgba(127,127,127,.07);
+                 border:1px solid rgba(127,127,127,.16);}
+      .ap-bloco .ap-r {font-size:.78rem; opacity:.7; font-weight:500;}
+      .ap-bloco .ap-v {font-size:1.4rem; font-weight:700; margin-top:.15rem; line-height:1.2;
+                       letter-spacing:-.01em;}
+      .ap-bloco .ap-d {font-size:.78rem; opacity:.65; margin-top:.2rem; line-height:1.3;}
+
+      /* Alertas em lista (pontos de risco) */
+      .alerta {border-left:5px solid; padding:.75rem 1rem; border-radius:.8rem;
+               background:rgba(127,127,127,.07); margin-bottom:.55rem; line-height:1.45;}
+      .alerta b {font-size:1rem;}
+      .alerta span {font-size:.92rem; opacity:.9;}
+
+      /* Mapas e tabelas com cantos arredondados */
+      iframe {border-radius: 1rem;}
+      [data-testid="stDataFrame"] {border-radius: .8rem; overflow: hidden;}
     </style>""", unsafe_allow_html=True)
+
+
+def cabecalho(titulo: str, subtitulo: str = "", sobre: str = ""):
+    """Título da página (substitui o st.title, grande demais no celular)."""
+    st.markdown(f'<div class="ap-cab">{f"<div class=ap-sobre>{sobre}</div>" if sobre else ""}'
+                f'<div class="ap-t">{titulo}</div>'
+                f'{f"<div class=ap-s>{subtitulo}</div>" if subtitulo else ""}</div>',
+                unsafe_allow_html=True)
+
+
+def cartao_risco(nivel: str, titulo: str, texto: str, rotulo: str = "Risco de alagamento"):
+    """Cartão grande no topo: nível de risco com a cor do nível."""
+    cor = risk.CORES[nivel]
+    st.markdown(f'<div class="ap-hero" style="background:{cor}17;border-color:{cor}55">'
+                f'<div class="ap-ic">{risk.EMOJI[nivel]}</div><div>'
+                f'<div class="ap-n" style="color:{cor}">{rotulo} · {nivel}</div>'
+                f'<div class="ap-tt">{titulo}</div><div class="ap-x">{texto}</div></div></div>',
+                unsafe_allow_html=True)
+
+
+def blocos(itens: list[tuple]):
+    """Grade de indicadores: [(rótulo, valor, detalhe), ...]. Vira 2 colunas no celular."""
+    html = "".join(f'<div class="ap-bloco"><div class="ap-r">{r}</div><div class="ap-v">{v}</div>'
+                   f'{f"<div class=ap-d>{d}</div>" if d else ""}</div>' for r, v, *resto in itens
+                   for d in [resto[0] if resto else ""])
+    st.markdown(f'<div class="ap-grade">{html}</div>', unsafe_allow_html=True)
 
 
 def pct(p: float) -> str:
@@ -67,7 +136,13 @@ def aviso_offline(salva_em: pd.Timestamp | None, agora: pd.Timestamp, fim_previs
 
 
 def mapa(center=CENTRO_SP, zoom=11) -> folium.Map:
-    return folium.Map(location=center, zoom_start=zoom, tiles="OpenStreetMap", control_scale=True)
+    m = folium.Map(location=center, zoom_start=zoom, tiles="OpenStreetMap", control_scale=True)
+    # Fundo claro e discreto (OpenStreetMap em tons de cinza): os pontos de risco se destacam.
+    # Os pedaços de mapa continuam os do OSM, que o app guarda para usar sem internet.
+    m.get_root().header.add_child(folium.Element(
+        "<style>.leaflet-tile-pane{filter:grayscale(.9) brightness(1.04) contrast(.92)}"
+        ".leaflet-container{background:#eef1f5;font-family:Inter,'Segoe UI',sans-serif}</style>"))
+    return m
 
 
 def mostrar_mapa(m: folium.Map, altura: int = 500):
@@ -94,8 +169,8 @@ def camada_pontos(m: folium.Map, pts: pd.DataFrame, col_p="p_janela"):
     if col_p not in pts.columns:  # sem previsão (offline): só o histórico de cada ponto
         for _, p in pts.iterrows():
             folium.CircleMarker(
-                location=(p["lat"], p["lon"]), radius=5, color="#333", weight=0.6, fill=True,
-                fill_color="#8a8f98", fill_opacity=0.9,
+                location=(p["lat"], p["lon"]), radius=6, color="#ffffff", weight=1.5, fill=True,
+                fill_color="#7b8794", fill_opacity=0.95,
                 tooltip=(f"<b>{p['nome']}</b> — {p['bairro']}<br>"
                          f"Histórico: {p['n_eventos']} alagamentos desde {p['primeiro'][:4]}"),
             ).add_to(m)
@@ -103,8 +178,8 @@ def camada_pontos(m: folium.Map, pts: pd.DataFrame, col_p="p_janela"):
     for _, p in pts.sort_values(col_p).iterrows():
         nivel = risk.classificar(p[col_p])
         folium.CircleMarker(
-            location=(p["lat"], p["lon"]), radius=4 + 3 * risk.ORDEM[nivel],
-            color="#333", weight=0.6, fill=True, fill_color=risk.CORES[nivel], fill_opacity=0.9,
+            location=(p["lat"], p["lon"]), radius=5 + 3 * risk.ORDEM[nivel],
+            color="#ffffff", weight=1.5, fill=True, fill_color=risk.CORES[nivel], fill_opacity=0.95,
             tooltip=(f"<b>{p['nome']}</b> — {p['bairro']}<br>"
                      f"Chance de alagar: <b>{pct(p[col_p])}</b>"
                      + (f" ({risk.vezes_normal(p[col_p], p['p_normal'])})" if "p_normal" in p else "") + "<br>"
@@ -150,10 +225,10 @@ def grafico_chuva_risco(df: pd.DataFrame, agora: pd.Timestamp, altura=260):
             alt.Tooltip("p:Q", format=".1%", title="Prob. alagamento")]
     extras = [("umidade", ".0f", "Umidade (%)"), ("vento", ".0f", "Vento (km/h)"), ("rajada", ".0f", "Rajadas (km/h)")]
     dica += [alt.Tooltip(f"{c}:Q", format=f, title=t) for c, f, t in extras if c in df.columns]
-    barras = base.mark_bar(color="#5b9bd5", opacity=0.8).encode(
+    barras = base.mark_bar(color=AGUA, opacity=0.85, cornerRadiusTopLeft=2, cornerRadiusTopRight=2).encode(
         y=alt.Y("precip:Q", title="Chuva (mm/h)"), tooltip=dica)
-    linha = base.mark_line(color="#c62828", strokeWidth=2.5).encode(
+    linha = base.mark_line(color=VERMELHO, strokeWidth=2.5, interpolate="monotone").encode(
         y=alt.Y("p:Q", title="Prob. de alagamento (por hora)", axis=alt.Axis(format="%")))
-    regra = alt.Chart(pd.DataFrame({"t": [agora]})).mark_rule(strokeDash=[4, 4], color="gray") \
+    regra = alt.Chart(pd.DataFrame({"t": [agora]})).mark_rule(strokeDash=[4, 4], color="#8a94a6") \
         .encode(x="t:T")
     return alt.layer(barras, linha, regra).resolve_scale(y="independent").properties(height=altura)

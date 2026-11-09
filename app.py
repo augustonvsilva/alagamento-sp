@@ -5,12 +5,14 @@ Rodar:  streamlit run app.py
 import streamlit as st
 
 from src import servico, ui
-from src.config import MODELS, PROCESSED
+from src.config import MODELS, PROCESSED, ROOT
 
 st.set_page_config(page_title="Alerta Alagamento SP", page_icon="🌧️", layout="wide",
+                   initial_sidebar_state="collapsed",
                    menu_items={"About": "Projeto acadêmico de análise de dados — previsão de "
                                         "alagamentos em São Paulo com dados do CGE e Open-Meteo."})
 ui.css()
+st.logo(str(ROOT / "assets/logo.svg"), size="large")
 
 faltando = [p.name for p in (MODELS / "modelo.json", PROCESSED / "pontos.parquet",
                              PROCESSED / "celulas.parquet") if not p.exists()]
@@ -30,7 +32,7 @@ PAGINAS = {
         st.Page("paginas/modelo.py", title="Como o modelo funciona", icon="🧠"),
     ],
 }
-paginas = st.navigation(PAGINAS)
+paginas = st.navigation(PAGINAS, position="top")  # barra no topo, como um app
 
 # Localização do aparelho (?lat=..&lon=..), enviada pelo index.html quando a pessoa permite
 # o acesso à localização (no navegador ou no app Android). Usada em "Minha região".
@@ -52,7 +54,7 @@ if alvo:
         st.switch_page(destino)
 
 with st.sidebar:
-    st.markdown("### 🌧️ Alerta Alagamento SP")
+    st.markdown("#### Configurações")
     st.caption("Previsão de alagamentos baseada no histórico do CGE e na previsão do tempo.")
     with st.expander("🧪 Modo simulação", expanded=False):
         st.caption("Força uma chuva em toda a cidade — útil para demonstrar o app em dia seco.")
