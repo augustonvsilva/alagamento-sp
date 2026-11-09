@@ -32,6 +32,31 @@ def prob_alguma(probs) -> float:
     return float(1 - np.prod(1 - p)) if p.size else 0.0
 
 
+HORAS_ANO = 8766
+
+
+def chance_normal(taxa_ano, participacao=1.0, horas: int = 24):
+    """Chance "normal" de alagar numa janela de N horas: a média histórica do local.
+
+    taxa_ano = horas com alagamento por ano na região (célula); participacao = fração dessas
+    horas em que o ponto específico alagou (1 para a região inteira).
+    """
+    b = np.clip(np.asarray(taxa_ano, dtype=float) / HORAS_ANO * np.asarray(participacao, dtype=float), 0, 1)
+    return 1 - (1 - b) ** horas
+
+
+def vezes_normal(p, normal) -> str:
+    """Compara a chance prevista com a média histórica do local, em palavras."""
+    if normal is None or pd.isna(normal) or normal <= 0 or pd.isna(p):
+        return ""
+    r = p / normal
+    if r >= 1.5:
+        return f"{r:.0f}× o normal" if r >= 10 else f"{r:.1f}× o normal".replace(".", ",")
+    if r >= 0.67:
+        return "perto do normal"
+    return "abaixo do normal"
+
+
 def simular_chuva(fc: pd.DataFrame, agora: pd.Timestamp, mm_h: float, horas: int) -> pd.DataFrame:
     """Substitui a previsão por uma chuva fixa nas próximas N horas (para demonstração)."""
     fc = fc.copy()

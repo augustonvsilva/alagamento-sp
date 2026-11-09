@@ -41,7 +41,7 @@ final class CacheWeb {
 
     private static final String TAG = "CacheWeb";
 
-    private enum Politica { CACHE_PRIMEIRO, REDE_PRIMEIRO, SEM_CACHE }
+    private enum Politica { CACHE_PRIMEIRO, REDE_PRIMEIRO, SEM_CACHE, REPASSAR }
 
     private final File pasta;
     private final AssetManager assets;
@@ -56,9 +56,13 @@ final class CacheWeb {
     private static Politica politica(String host) {
         if (host == null) return Politica.SEM_CACHE;
         if (host.endsWith("open-meteo.com") || host.startsWith("nominatim.")
-                || host.contains("osrm") || host.startsWith("routing.")) {
+                || host.contains("osrm") || host.startsWith("routing.")
+                || host.equals("raw.githubusercontent.com")) {  // cópia ao vivo do CGE: sempre nova
             return Politica.SEM_CACHE;
         }
+        // Site do CGE (alagamentos de hoje): não permite leitura por outras páginas (CORS).
+        // O app busca por aqui e libera a resposta — sem guardar, porque muda a todo momento.
+        if (host.endsWith("cgesp.org")) return Politica.REPASSAR;
         if (host.endsWith("tile.openstreetmap.org") || host.equals("pypi.org")) {
             return Politica.REDE_PRIMEIRO;
         }
@@ -73,6 +77,15 @@ final class CacheWeb {
         String url = req.getUrl().toString();
         Politica p = politica(req.getUrl().getHost());
         if (p == Politica.SEM_CACHE) return null;
+
+        if (p == Politica.REPASSAR) {
+            try {
+                return repassar(url, cabReq);
+            } catch (IOException e) {
+                Log.d(TAG, "sem rede (" + e.getClass().getSimpleName() + ") " + url);
+                return null;
+            }
+        }
 
         String chave = chave(url);
         if (p == Politica.CACHE_PRIMEIRO) {
@@ -171,6 +184,18 @@ final class CacheWeb {
             throw new IOException("falha ao gravar " + arq);
         }
         return resposta(m.getProperty("tipo"), 200, "OK", new FileInputStream(arq));
+    }
+
+    /** Busca na rede e devolve sem gravar (com o cabeçalho que libera a leitura pela página). */
+    private WebResourceResponse repassar(String url, Map<String, String> cabReq) throws IOException {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        c.setConnectTimeout(15000);
+        c.setReadTimeout(30000);
+        c.setRequestProperty("User-Agent", "alagamento-sp/1.0 (projeto academico de analise de dados)");
+        int status = c.getResponseCode();
+        InputStream corpo = status >= 400 ? (c.getErrorStream() != null ? c.getErrorStream() : vazio()) : c.getInputStream();
+        String frase = c.getResponseMessage();
+        return resposta(c.getContentType(), status, frase == null || frase.isEmpty() ? "OK" : frase, corpo);
     }
 
     private static WebResourceResponse resposta(String tipoCompleto, int status, String frase, InputStream corpo) {

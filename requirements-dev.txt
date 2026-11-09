@@ -1,5 +1,4 @@
 # Pipeline de dados e testes (além do requirements.txt)
 -r requirements.txt
-beautifulsoup4>=4.12
 scikit-learn>=1.5
 pytest>=8

@@ -8,13 +8,24 @@ do tempo hora a hora. Projeto acadêmico de análise de dados.
 
 | Página | Para quê |
 |---|---|
-| 🗺️ **Visão geral** | Mapa e ranking dos pontos com maior chance de alagar nas próximas 3, 6, 12 ou 24h, alertas e previsão hora a hora de cada ponto |
-| 📍 **Minha região** | Para a **localização atual** (pedida ao abrir o app) ou um endereço: tempo agora, chuva e risco previstos, pontos de alagamento próximos e histórico da região |
-| 🚗 **Trajeto seguro** | Compara rotas alternativas pela chance de passar por um ponto alagado e indica o **melhor horário para sair** |
+| 🗺️ **Visão geral** | Mapa e ranking dos pontos com maior chance de alagar nas próximas 3, 6, 12 ou 24h, alertas, previsão hora a hora de cada ponto e os **alagamentos registrados hoje pelo CGE (ao vivo)**, com o que o modelo previa para cada um |
+| 📍 **Minha região** | Para a **localização atual** (pedida ao abrir o app) ou um endereço: tempo agora (com umidade e vento), chuva e risco previstos, **alagamentos ativos agora** por perto, pontos de alagamento próximos e histórico da região |
+| 🚗 **Trajeto seguro** | Compara rotas alternativas pela chance de passar por um ponto alagado, **procura desvios** que passem longe dos pontos de risco e indica o **melhor horário para sair** |
 | 📊 **Análise histórica** | Análise exploratória: sazonalidade, hora do dia, zonas, relação chuva × alagamento, mapa de calor, download dos dados |
 | 🧠 **Como o modelo funciona** | Métricas de validação, calibração, importância das variáveis e limitações |
 
 O **modo simulação** (barra lateral) força uma chuva em toda a cidade para demonstrar o app em dia seco.
+
+Toda chance vem com a comparação com o **normal do local** ("3% — 5× o normal"), calculado com o
+histórico do CGE: como alagamento é raro, porcentagens pequenas podem ser altas.
+
+**No celular (APK):**
+- **Alerta com o app fechado:** de hora em hora o Android recalcula o risco perto do último local
+  visto pelo app (mesmo modelo, em Java, testado contra o Python) e notifica quando ele fica
+  **alto** — no máximo a cada 6 h, a não ser que o risco suba de nível.
+- **Funciona sem internet:** o Python e os pacotes vêm dentro do APK, e a última previsão fica
+  salva no aparelho (com aviso da hora em que foi baixada). Sem previsão salva, mostra os pontos e
+  o histórico da região.
 
 ## Arquitetura
 
@@ -91,7 +102,18 @@ python -m pipeline.executar            # completo (1ª vez: 1-3 h, limitado pela
 python -m pipeline.executar --pular-coleta
 ```
 Cada etapa também roda isoladamente: `python -m pipeline.coletar_cge`, `pipeline.geocodificar`,
-`pipeline.chuva_historica` e `pipeline.treinar_modelo`. Todas são incrementais e usam cache.
+`pipeline.chuva_historica`, `pipeline.clima_historico` e `pipeline.treinar_modelo`. Todas são
+incrementais e usam cache.
+
+**Atualização automática:** o workflow [`atualizar-dados`](.github/workflows/atualizar_dados.yml)
+roda o pipeline todo dia 1º do mês (e quando o código do pipeline muda), testa e publica os dados e
+o modelo novos no repositório. Ele também roda o **experimento de umidade do ar e vento**: treina o
+modelo com e sem essas variáveis e mostra o resultado na página "Como o modelo funciona".
+
+**Alagamentos ao vivo:** o workflow [`cge-ao-vivo`](.github/workflows/cge_ao_vivo.yml) copia a
+página do dia do CGE a cada ~15 min para o ramo `ao-vivo`. A versão do navegador lê essa cópia,
+porque o site do CGE não permite ser lido por outras páginas (CORS). O APK e o Streamlit local
+leem o CGE direto.
 
 ### Testes
 ```powershell
@@ -120,7 +142,12 @@ Como funciona: [`android/`](android/) é um app nativo mínimo (Java, sem biblio
 que roda o mesmo `index.html` + código Python empacotados dentro do APK, servidos na origem segura
 `https://appassets.androidplatform.net/`. O `index.html` pede a localização (`navigator.geolocation`,
 que no app aciona a permissão do Android) e abre a página "Minha região" com `?lat=..&lon=..`.
-Precisa de internet (previsão do tempo, mapas e, na 1ª abertura, o Python).
+O Python, os pacotes e o stlite vão dentro do APK (lista em `android/app/semente.txt`, baixados
+no build), e o [`CacheWeb.java`](android/app/src/main/java/br/alagamentosp/app/CacheWeb.java) guarda
+o resto que o app baixa (inclusive os pedaços de mapa já vistos), então ele abre sem internet. O
+[`AlertaJob.java`](android/app/src/main/java/br/alagamentosp/app/AlertaJob.java) faz o alerta em
+segundo plano, a partir de `models/alerta.json` (gerado pelo pipeline). Para ver um alerta de teste
+no emulador: `adb shell am start -n br.alagamentosp.app/.MainActivity --ez testar_alerta true`.
 
 Para gerar o APK de novo (requer JDK 17 e Android SDK; `ANDROID_HOME` apontando para o SDK):
 ```powershell

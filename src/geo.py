@@ -47,6 +47,34 @@ def rotas(origem, destino, alternativas=True):
     return out
 
 
+def rota_via(origem, via, destino):
+    """Rota de carro passando por um ponto intermediário (usada para desviar de alagamentos)."""
+    pts = ";".join(f"{lo},{la}" for la, lo in (origem, via, destino))
+    r = requests.get(f"https://router.project-osrm.org/route/v1/driving/{pts}",
+                     params={"overview": "full", "geometries": "geojson"}, headers=HEADERS, timeout=30)
+    r.raise_for_status()
+    rts = r.json().get("routes", [])
+    if not rts:
+        return None
+    rt = rts[0]
+    return {"dist_km": rt["distance"] / 1000, "dur_min": rt["duration"] / 60,
+            "path": np.array(rt["geometry"]["coordinates"])[:, ::-1]}
+
+
+def pontos_de_desvio(path: np.ndarray, lat: float, lon: float, dist_m: float = 900):
+    """Dois pontos ao lado do caminho (um de cada lado), na altura do ponto a evitar."""
+    k = 111_320.0
+    cos = np.cos(np.radians(lat))
+    xy = np.c_[(path[:, 1] - lon) * k * cos, (path[:, 0] - lat) * k]
+    i = int(np.argmin((xy ** 2).sum(1)))
+    a, b = xy[max(i - 5, 0)], xy[min(i + 5, len(xy) - 1)]
+    d = b - a
+    if not np.any(d):
+        return []
+    n = np.array([-d[1], d[0]]) / np.hypot(*d)  # perpendicular ao trecho
+    return [(lat + s * n[1] * dist_m / k, lon + s * n[0] * dist_m / (k * cos)) for s in (1, -1)]
+
+
 def haversine_m(lat1, lon1, lat2, lon2):
     lat1, lon1, lat2, lon2 = map(np.radians, (lat1, lon1, lat2, lon2))
     a = np.sin((lat2 - lat1) / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2) ** 2

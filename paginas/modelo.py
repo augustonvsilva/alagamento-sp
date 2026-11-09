@@ -44,6 +44,21 @@ st.caption(f"Alagamento é um evento raro ({base:.2%} das horas-região). Um mod
            f"teria PR-AUC ≈ {base:.3f}. O modelo escolhido tem {melhor_pr:.3f}, ou seja, "
            f"**{melhor_pr / base:.0f}× melhor que o acaso**. A heurística do protótipo serve de base de comparação.")
 
+with st.container(border=True):
+    st.markdown(f"""
+**Como ler as porcentagens do app**
+
+- **Alagamento é raro.** Em uma hora qualquer, a chance de o CGE registrar um alagamento numa região
+  é de {base:.2%}. Por isso uma chance de **3% já é alta**: é muitas vezes o normal.
+- Por isso o app sempre compara com o **normal do local** ("5× o normal"): a média histórica de
+  alagamentos daquele ponto ou região, calculada com os dados do CGE desde {met['periodo'][0][:4]}.
+- O modelo **ordena bem** as situações de risco (ROC-AUC {met['resultados'][met['modelo_escolhido']]['roc_auc']:.2f}),
+  mas **não acerta o momento exato**: mesmo nas horas de maior risco, a maioria não termina em
+  alagamento registrado (PR-AUC {melhor_pr:.3f}). Use o nível de risco como **aviso para ficar atento**,
+  não como certeza.
+- O CGE só registra alagamentos que viu; alagamentos pequenos ou em ruas menores podem ficar de fora.
+""")
+
 c1, c2 = st.columns(2)
 with c1:
     st.markdown("**Calibração:** quando o modelo diz X%, acontece X%?")
@@ -78,6 +93,33 @@ st.altair_chart(alt.Chart(resp).mark_line(color="#c62828", strokeWidth=3).encode
     y=alt.Y("prob:Q", title="Probabilidade de alagamento na hora", axis=alt.Axis(format="%")),
     tooltip=[alt.Tooltip("chuva_mm_h:Q", title="mm/h"), alt.Tooltip("prob:Q", format=".1%")]
 ).properties(height=260), width="stretch")
+
+st.subheader("Umidade do ar e vento ajudam a prever?")
+exp = met.get("experimento_clima")
+if not exp:
+    st.info("Este teste roda junto com a atualização mensal dos dados (GitHub Actions), que baixa "
+            "o histórico de umidade e vento de cada região. O resultado aparece aqui depois da "
+            "próxima atualização.", icon="🧪")
+else:
+    tab_exp = pd.DataFrame(exp["resultados"]).T.reset_index(names="Variáveis")
+    st.dataframe(tab_exp[["Variáveis", "roc_auc", "pr_auc", "brier"]], hide_index=True, width="stretch",
+                 column_config={"roc_auc": st.column_config.NumberColumn("ROC-AUC", format="%.3f"),
+                                "pr_auc": st.column_config.NumberColumn("PR-AUC", format="%.3f"),
+                                "brier": st.column_config.NumberColumn("Brier", format="%.5f")})
+    g = exp["ganho_pr_auc"]
+    coef = ", ".join(f"{k}: {v:+.2f}" for k, v in exp["coef_padronizado"].items())
+    if g >= 0.05:
+        conclusao = (f"Umidade e vento **melhoram** a previsão ({g:+.1%} de PR-AUC no teste). "
+                     "Pela regra de parcimônia (≥ 5%), passam a ser candidatos para o modelo do app.")
+    else:
+        conclusao = (f"Umidade e vento **não melhoram o suficiente** ({g:+.1%} de PR-AUC no teste, abaixo "
+                     "dos 5% exigidos). Mantivemos o modelo só com chuva: mais simples e igual de bom. "
+                     "Faz sentido: o alagamento depende da quantidade de água que cai; umidade alta e "
+                     "vento forte acompanham as tempestades, mas a chuva já carrega essa informação.")
+    st.markdown(conclusao)
+    st.caption(f"Mesmas {n(exp['n_horas'])} horas-região e mesma validação temporal nos dois modelos "
+               f"({n(exp['positivos_teste'])} alagamentos no teste). Coeficientes padronizados das "
+               f"novas variáveis: {coef}.")
 
 st.subheader("Do modelo ao mapa")
 st.markdown("""

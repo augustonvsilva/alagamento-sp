@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from src import features, geo, offline, risk, weather
+from src import ao_vivo, features, geo, offline, risk, weather
 from src.config import MODELS, PROCESSED, TZ
 from src.grade import celula_id, id_para_coord
 
@@ -82,6 +82,20 @@ def previsao_salva_em() -> pd.Timestamp | None:
     return st.session_state.get("previsao_salva_em")
 
 
+@st.cache_data(ttl=300, show_spinner="Consultando os alagamentos de hoje no CGE...")
+def _ao_vivo_bruto() -> dict:
+    return ao_vivo.buscar()
+
+
+def alagamentos_hoje() -> tuple[pd.DataFrame, dict] | None:
+    """Alagamentos registrados hoje pelo CGE, com coordenadas; None se não deu para consultar."""
+    try:
+        d = _ao_vivo_bruto()
+    except Exception:  # noqa: BLE001
+        return None
+    return ao_vivo.localizar(d["registros"], eventos(), pontos()), d
+
+
 @st.cache_data(ttl=600)
 def tempo_atual(lat: float, lon: float) -> dict:
     return weather.current_weather(lat, lon)
@@ -104,6 +118,35 @@ def endereco_de(lat: float, lon: float) -> str:
 @st.cache_data(ttl=3600, show_spinner="Calculando trajetos...")
 def rotas(o: tuple, d: tuple):
     return geo.rotas(o, d)
+
+
+@st.cache_data(ttl=3600, show_spinner="Procurando desvios dos pontos de risco...")
+def _rota_via(o: tuple, via: tuple, d: tuple):
+    return geo.rota_via(o, via, d)
+
+
+def rotas_desviando(o: tuple, d: tuple, rts: list, evitar: pd.DataFrame, max_pontos: int = 2) -> list:
+    """Rotas extras que contornam os pontos de risco de `evitar` (ponto, lat, lon, nome).
+
+    O serviço de rotas gratuito (OSRM) não aceita "evite esta área"; então, para cada ponto de
+    risco no caminho, pede rotas passando ~1 km ao lado dele e fica com as que realmente o evitam.
+    """
+    novas = []
+    for _, p in evitar.head(max_pontos).iterrows():
+        caminho = next((r["path"] for r in rts if len(pontos_no_caminho(r["path"], p.to_frame().T, 150))), None)
+        if caminho is None:
+            continue
+        for via in geo.pontos_de_desvio(caminho, p["lat"], p["lon"]):
+            try:
+                rt = _rota_via(tuple(o), via, tuple(d))
+            except Exception:  # noqa: BLE001 — um desvio que falha não impede os outros
+                continue
+            if rt is None or len(pontos_no_caminho(rt["path"], p.to_frame().T, 150)):
+                continue  # o desvio passa pelo ponto mesmo assim
+            if any(abs(rt["dist_km"] - r["dist_km"]) < 0.05 for r in rts + novas):
+                continue  # repetida
+            novas.append({**rt, "desvio": p["nome"]})
+    return novas
 
 
 # ---------------------------------------------------------------- previsão de risco
@@ -140,6 +183,10 @@ def previsao(sim: tuple | None = None) -> Previsao:
 
     r_cel = cel.merge(risk.resumo(cel_h, "celula", agora, escala="regiao"), left_on="celula", right_index=True)
     r_pts = pts.merge(risk.resumo(pts_h, "ponto", agora), left_on="ponto", right_index=True)
+    # Chance "normal" (média histórica) para comparar: "3% = 5× o normal deste local"
+    taxa = cel.set_index("celula")["taxa"]
+    r_cel["p_normal"] = risk.chance_normal(r_cel["taxa"])
+    r_pts["p_normal"] = risk.chance_normal(r_pts["celula"].map(taxa).fillna(0), r_pts["participacao"])
     return Previsao(agora, cel_h, pts_h, r_cel, r_pts)
 
 

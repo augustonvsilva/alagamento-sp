@@ -1,0 +1,70 @@
+# Atualização mensal: coleta os alagamentos novos do CGE, baixa a chuva (e a umidade/vento,
+# para o experimento), treina o modelo de novo e publica os dados no repositório.
+# O app (GitHub Pages) passa a usar os dados novos assim que o commit entra no main.
+#
+# Também roda quando o código do pipeline muda, e pode ser disparado à mão (aba Actions).
+name: atualizar-dados
+
+on:
+  schedule:
+    - cron: "0 9 1 * *"  # dia 1 de cada mês, 6h de Brasília
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["pipeline/**", ".github/workflows/atualizar_dados.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: atualizar-dados
+  cancel-in-progress: false
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+
+      # Downloads brutos (dias do CGE, chuva, umidade/vento) guardados entre execuções
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/raw/cge_dias
+            data/raw/chuva
+            data/raw/clima
+          key: dados-brutos-${{ github.run_id }}
+          restore-keys: dados-brutos-
+
+      - name: Pipeline (coleta, geocodificação, chuva, umidade/vento, treino)
+        run: python -u -m pipeline.executar
+
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            data/raw/cge_dias
+            data/raw/chuva
+            data/raw/clima
+          key: dados-brutos-${{ github.run_id }}
+
+      - name: Testes
+        run: python -m pytest -q tests/test_core.py tests/test_alerta_java.py
+
+      - name: Publicar dados e modelo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/raw/cge_alagamentos.parquet data/raw/geocache.json \
+                  data/processed/alagamentos_geo.parquet data/processed/celulas.parquet \
+                  data/processed/diario.parquet data/processed/pontos.parquet models/*.json
+          if git diff --cached --quiet; then echo "Sem mudanças."; exit 0; fi
+          git commit -q -m "Dados e modelo atualizados (job mensal)"
+          git pull -q --rebase origin main
+          git push -q origin HEAD:main

@@ -137,3 +137,73 @@ def test_tempo_da_previsao():
     assert atual["descricao"] == "Chuva fraca" and atual["direcao"] == "S"
     assert atual["relative_humidity_2m"] == 80
     assert direcao_vento(350) == "N" and direcao_vento(None) == ""
+
+
+def test_pontos_de_desvio_ficam_dos_dois_lados():
+    # caminho reto de oeste para leste; ponto no meio -> desvios ao norte e ao sul, ~900 m
+    path = np.c_[np.full(50, -23.55), np.linspace(-46.70, -46.60, 50)]
+    vias = geo.pontos_de_desvio(path, -23.55, -46.65)
+    assert len(vias) == 2
+    lats = sorted(v[0] for v in vias)
+    assert lats[0] < -23.55 < lats[1]
+    for la, lo in vias:
+        assert 800 < geo.haversine_m(-23.55, -46.65, la, lo) < 1000
+
+
+def test_rotas_desviando_so_aceita_rota_que_evita_o_ponto(monkeypatch):
+    from src import servico
+    reta = np.c_[np.full(50, -23.55), np.linspace(-46.70, -46.60, 50)]
+    rts = [{"dist_km": 10.0, "dur_min": 20.0, "path": reta}]
+    ponto = pd.DataFrame({"ponto": [1], "lat": [-23.55], "lon": [-46.65], "nome": ["Rua X"]})
+
+    def via(o, v, d):  # rota que sobe até o ponto de desvio (passa longe do alagamento)
+        return {"dist_km": 11.0, "dur_min": 23.0,
+                "path": np.array([[-23.55, -46.70], [v[0], -46.66], [v[0], -46.64], [-23.55, -46.60]])}
+    monkeypatch.setattr(servico, "_rota_via", via)
+    novas = servico.rotas_desviando((-23.55, -46.70), (-23.55, -46.60), rts, ponto)
+    assert len(novas) == 1 and novas[0]["desvio"] == "Rua X"  # a segunda tem a mesma distância
+
+    monkeypatch.setattr(servico, "_rota_via", lambda o, v, d: {**rts[0], "dist_km": 12.0})
+    assert servico.rotas_desviando((-23.55, -46.70), (-23.55, -46.60), rts, ponto) == []
+
+
+def test_parse_dia_marca_alagamento_ativo():
+    regs = parse_dia(HTML_CGE, date(2026, 11, 2))
+    por_local = {r["local"]: r for r in regs}
+    assert por_local["AV JOAO DIAS"]["ativo"] is True
+    assert por_local["R REIMS"]["ativo"] is False
+
+
+def test_ao_vivo_localiza_pelo_historico():
+    from pathlib import Path
+    from src import ao_vivo
+    raiz = Path(__file__).resolve().parent.parent
+    ev = pd.read_parquet(raiz / "data/processed/alagamentos_geo.parquet")
+    pts = pd.read_parquet(raiz / "data/processed/pontos.parquet")
+    dia = ev["data"].value_counts().index[0]  # o dia com mais alagamentos
+    regs = ev[ev["data"] == dia][ao_vivo.COLUNAS[:-1]].assign(ativo=True).to_dict("records")
+    regs.append({**regs[0], "local": "RUA QUE NAO EXISTE", "bairro": "Bairro Inventado"})
+    df = ao_vivo.localizar(regs, ev, pts)
+    assert len(df) == len(regs)
+    assert df["lat"].iloc[:-1].notna().all()          # todos os do histórico foram localizados
+    assert df["precisao"].iloc[-1] == "desconhecida"   # o inventado não
+    assert df["ponto"].notna().any()                    # e parte bate com pontos monitorados
+    assert "ainda ativo" in ao_vivo.resumo_texto(df)
+
+
+def test_experimento_clima_detecta_variavel_util():
+    """Com dados sintéticos em que a umidade influencia o alagamento, o experimento mostra ganho."""
+    sk = pytest.importorskip("sklearn")  # noqa: F841 — só no ambiente do pipeline
+    from pipeline.treinar_modelo import experimento_clima
+    rng = np.random.default_rng(0)
+    t = pd.date_range("2024-01-01", periods=24 * 400, freq="h")
+    chuva = pd.DataFrame({"celula": "a", "time": t, "precip": np.where(rng.random(len(t)) < 0.1, rng.gamma(1.5, 5, len(t)), 0)})
+    df = features.construir(chuva, {"a": 20.0})
+    umid = rng.uniform(30, 100, len(t))
+    z = -9 + 1.2 * df["log_p3h"] + 0.06 * (umid - 65)
+    df["y"] = (rng.random(len(t)) < 1 / (1 + np.exp(-z))).astype(int)
+    clima = pd.DataFrame({"celula": "a", "time": t, "umidade": umid,
+                          "vento": rng.uniform(0, 30, len(t)), "rajada": rng.uniform(0, 60, len(t))})
+    r = experimento_clima(df, clima, pd.Timestamp("2024-11-01"))
+    assert r["ganho_pr_auc"] > 0.05
+    assert r["coef_padronizado"]["Umidade do ar"] > abs(r["coef_padronizado"]["Vento"])

@@ -46,19 +46,44 @@ def pesos_temporais(t: pd.Series) -> np.ndarray:
     return 0.5 ** (anos / MEIA_VIDA_ANOS)
 
 
-def treinar(m, d: pd.DataFrame):
+def treinar(m, d: pd.DataFrame, feats=FEATURES):
     w = pesos_temporais(d["time"])
     if hasattr(m, "steps"):
-        m.fit(d[FEATURES], d["y"], **{f"{m.steps[-1][0]}__sample_weight": w})
+        m.fit(d[feats], d["y"], **{f"{m.steps[-1][0]}__sample_weight": w})
     else:
-        m.fit(d[FEATURES], d["y"], sample_weight=w)
+        m.fit(d[feats], d["y"], sample_weight=w)
     recente = d[d["time"] >= d["time"].max() - JANELA_AJUSTE]
-    delta = estimar_delta(m.predict_proba(recente[FEATURES])[:, 1], recente["y"].mean())
+    delta = estimar_delta(m.predict_proba(recente[feats])[:, 1], recente["y"].mean())
     return m, delta
 
 
-def prever(m, delta, X) -> np.ndarray:
-    return ajustar_prevalencia(m.predict_proba(X[FEATURES])[:, 1], delta)
+def prever(m, delta, X, feats=FEATURES) -> np.ndarray:
+    return ajustar_prevalencia(m.predict_proba(X[feats])[:, 1], delta)
+
+
+CLIMA = ["umidade", "vento", "rajada"]
+NOMES_CLIMA = {"umidade": "Umidade do ar", "vento": "Vento", "rajada": "Rajadas de vento"}
+
+
+def experimento_clima(df: pd.DataFrame, clima: pd.DataFrame, corte: pd.Timestamp) -> dict:
+    """Umidade do ar e vento ajudam a prever alagamentos além da chuva?
+
+    Treina a mesma regressão logística com e sem as 3 variáveis, nas MESMAS horas e com a
+    mesma validação temporal, e compara no período de teste.
+    """
+    d = df.merge(clima[["celula", "time", *CLIMA]], on=["celula", "time"], how="left")
+    d[CLIMA] = d.groupby("celula")[CLIMA].transform(lambda s: s.interpolate(limit=3))  # buracos curtos
+    d = d.dropna(subset=CLIMA)
+    tr, te = d[d["time"] < corte], d[d["time"] >= corte]
+    res, coefs = {}, {}
+    for nome, feats in (("Só chuva (atual)", FEATURES), ("Chuva + umidade e vento", FEATURES + CLIMA)):
+        m, delta = treinar(make_pipeline(StandardScaler(), LogisticRegression(C=1.0, max_iter=2000)), tr, feats)
+        res[nome] = metricas(te["y"], prever(m, delta, te, feats))
+        coefs[nome] = dict(zip(feats, m.steps[-1][1].coef_[0].tolist()))
+    a, b = res["Só chuva (atual)"]["pr_auc"], res["Chuva + umidade e vento"]["pr_auc"]
+    return {"resultados": res, "ganho_pr_auc": float(b / a - 1),
+            "coef_padronizado": {NOMES_CLIMA[k]: coefs["Chuva + umidade e vento"][k] for k in CLIMA},
+            "n_horas": int(len(d)), "positivos_teste": int(te["y"].sum())}
 
 
 def exportar_json(m, nome: str, delta: float, d: pd.DataFrame) -> None:
@@ -161,6 +186,13 @@ def main(corte: pd.Timestamp = DATA_CORTE) -> None:
     for k in ("Heurística (protótipo)", "Regressão logística sem ajuste temporal"):
         print(f"{k}: {resultados[k]}")
 
+    # Experimento: umidade do ar e vento (se os dados foram baixados — pipeline.clima_historico)
+    exp_clima = None
+    arq_clima = PATHS.processed / "clima_horario.parquet"
+    if arq_clima.exists():
+        exp_clima = experimento_clima(df, pd.read_parquet(arq_clima), DATA_CORTE)
+        print(f"Experimento umidade/vento: ganho de PR-AUC {exp_clima['ganho_pr_auc']:+.1%}")
+
     # Parcimônia: o modelo complexo só vence se for >= 5% melhor em PR-AUC que o simples
     simples, complexo = "Regressão logística", "Gradient boosting"
     ganho = resultados[complexo]["pr_auc"] / resultados[simples]["pr_auc"] - 1
@@ -200,7 +232,7 @@ def main(corte: pd.Timestamp = DATA_CORTE) -> None:
         "n_treino": int(len(tr)), "n_teste": int(len(te)),
         "positivos_treino": int(tr["y"].sum()), "positivos_teste": int(te["y"].sum()),
         "resultados": resultados, "calibracao": calibracao(te["y"].values, previsoes[melhor]),
-        "importancia": importancia, "resposta_chuva": resposta,
+        "importancia": importancia, "resposta_chuva": resposta, "experimento_clima": exp_clima,
     }, open(PATHS.model / "metricas.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
     # Células (taxa histórica usada na inferência)
@@ -231,6 +263,10 @@ def main(corte: pd.Timestamp = DATA_CORTE) -> None:
     todos_dias = pd.Index(pd.date_range(ev["data"].min(), fim).strftime("%Y-%m-%d"), name="data")
     diario = ch_dia.reindex(todos_dias).assign(alagamentos=ev_dia.reindex(todos_dias).fillna(0).astype(int))
     diario.reset_index().to_parquet(PATHS.processed / "diario.parquet", index=False)
+
+    # Modelo + regiões + pontos para o alerta em segundo plano do app Android
+    from pipeline import exportar_alerta
+    exportar_alerta.main()
     print("OK")
 
 

@@ -9,6 +9,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.LocationManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.webkit.GeolocationPermissions;
@@ -79,21 +80,43 @@ public class MainActivity extends Activity {
         web.setWebChromeClient(new ClienteChrome());
         web.addJavascriptInterface(new Ponte(), "AppAndroid");
 
-        // Já na abertura: pede a localização para mostrar como está a área da pessoa.
+        // Já na abertura: pede a localização para mostrar como está a área da pessoa
+        // (e, no Android 13+, a permissão de notificação para o alerta de alagamento).
         permissaoRespondida = temPermissao();
-        if (!permissaoRespondida) {
-            requestPermissions(new String[]{
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION}, PEDIDO_LOCALIZACAO);
+        boolean pedirNotificacao = Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                && !getSharedPreferences(AlertaJob.PREFS, MODE_PRIVATE).getBoolean("notif_pedida", false);
+        if (!permissaoRespondida || pedirNotificacao) {
+            java.util.List<String> pedir = new java.util.ArrayList<>();
+            if (!permissaoRespondida) {
+                pedir.add(Manifest.permission.ACCESS_FINE_LOCATION);
+                pedir.add(Manifest.permission.ACCESS_COARSE_LOCATION);
+            }
+            if (pedirNotificacao) {
+                pedir.add(Manifest.permission.POST_NOTIFICATIONS);
+                getSharedPreferences(AlertaJob.PREFS, MODE_PRIVATE).edit().putBoolean("notif_pedida", true).apply();
+            }
+            requestPermissions(pedir.toArray(new String[0]), PEDIDO_LOCALIZACAO);
         } else {
             sugerirLigarGps();
         }
+
+        // Alerta em segundo plano: verifica o risco de hora em hora, mesmo com o app fechado
+        AlertaJob.agendar(this);
+        // Demonstração: adb shell am start -n br.alagamentosp.app/.MainActivity --ez testar_alerta true
+        if (getIntent().getBooleanExtra("testar_alerta", false)) AlertaJob.testarAgora(this);
 
         if (estado != null) {
             web.restoreState(estado);
         } else {
             web.loadUrl(INICIO);
         }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (intent.getBooleanExtra("testar_alerta", false)) AlertaJob.testarAgora(this);
     }
 
     @Override
@@ -147,6 +170,12 @@ public class MainActivity extends Activity {
          * Apaga o cache HTTP do WebView. Usado quando um pacote Python chega corrompido (ex.: o app
          * foi fechado no meio do download) — sem isso, recarregar reaproveitaria a cópia estragada.
          */
+        /** Guarda a localização do aparelho para o alerta em segundo plano (AlertaJob). */
+        @JavascriptInterface
+        public void salvarLocal(double lat, double lon) {
+            AlertaJob.salvarLocal(MainActivity.this, lat, lon);
+        }
+
         @JavascriptInterface
         public void limparCache() {
             cache.limpar();

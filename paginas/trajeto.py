@@ -61,11 +61,19 @@ def risco_saida(ids, dur_min, horas=12):
     return pd.DataFrame(linhas)
 
 
+# Pontos com risco moderado ou maior em alguma rota: tenta rotas que passem longe deles
+no_caminho = pd.concat([servico.pontos_no_caminho(rt["path"], prev.pts, buffer_m) for rt in rts])
+evitar = (no_caminho[no_caminho["p_janela"] >= risk.LIMIARES["ponto"][0]]
+          .drop_duplicates("ponto").sort_values("p_janela", ascending=False))
+desvios = servico.rotas_desviando(o[:2], d[:2], rts, evitar) if len(evitar) else []
+rts = list(rts) + desvios
+
 linhas = []
 for k, rt in enumerate(rts):
     no_cam = servico.pontos_no_caminho(rt["path"], prev.pts, buffer_m)
     saida = risco_saida(no_cam["ponto"], rt["dur_min"])
-    linhas.append({"k": k, "Rota": f"Opção {k + 1}", "dist": rt["dist_km"], "dur": rt["dur_min"],
+    nome = f"Desvio de {rt['desvio']}" if rt.get("desvio") else f"Opção {k + 1}"
+    linhas.append({"k": k, "Rota": nome, "dist": rt["dist_km"], "dur": rt["dur_min"],
                    "n_pontos": len(no_cam), "p_agora": saida["p"].iloc[0], "saida": saida,
                    "ids": list(no_cam["ponto"])})
 tab = pd.DataFrame(linhas)
@@ -85,13 +93,18 @@ st.dataframe(tab[["Rota", "dist", "dur", "n_pontos", "p_agora"]], hide_index=Tru
                             "p_agora": st.column_config.ProgressColumn("Risco saindo agora", format="percent",
                                                                        min_value=0, max_value=1)})
 
+if len(evitar):
+    st.caption(f"{len(evitar)} ponto(s) de risco moderado ou maior nas rotas. "
+               + (f"Encontrei {len(desvios)} desvio(s) que passa(m) longe deles (linhas extras no mapa)."
+                  if desvios else "Não encontrei um desvio razoável que passe longe deles."))
+
 col_m, col_s = st.columns([3, 2], gap="medium")
 with col_m:
     m = ui.mapa(o[:2], 12)
-    cores = ["#1565c0", "#6a1b9a", "#00838f"]
+    cores = ["#1565c0", "#6a1b9a", "#00838f", "#2e7d32", "#ad1457"]
     for _, r in tab.sort_values("k", ascending=False).iterrows():
         e_melhor = r["k"] == melhor["k"]
-        folium.PolyLine(rts[r["k"]]["path"].tolist(), color=cores[r["k"] % 3],
+        folium.PolyLine(rts[r["k"]]["path"].tolist(), color=cores[r["k"] % len(cores)],
                         weight=7 if e_melhor else 4, opacity=0.9 if e_melhor else 0.45,
                         tooltip=f"{r['Rota']}: {r['dist']:.1f} km, {r['dur']:.0f} min").add_to(m)
     folium.Marker(o[:2], tooltip="Origem", icon=folium.Icon(color="green", icon="play")).add_to(m)

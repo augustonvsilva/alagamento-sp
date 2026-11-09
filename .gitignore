@@ -9,3 +9,5 @@ data/processed/chuva_horaria.parquet
 
 # Previsão guardada para uso offline (src/offline.py)
 .cache/
+data/raw/clima/
+data/processed/clima_horario.parquet

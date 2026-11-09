@@ -1,0 +1,38 @@
+# Cópia ao vivo dos alagamentos de hoje do CGE (a cada ~15 min), publicada no ramo `ao-vivo`.
+# A versão do app no navegador lê essa cópia, porque o site do CGE não permite ser lido
+# direto por outras páginas (CORS). O app Android e o Streamlit no computador leem o CGE direto.
+name: cge-ao-vivo
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cge-ao-vivo
+  cancel-in-progress: true
+
+jobs:
+  copia:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: pip install requests beautifulsoup4
+      - name: Ler o CGE
+        run: python -m pipeline.cge_ao_vivo saida/ao_vivo.json
+      - name: Publicar no ramo ao-vivo (só o JSON, sem histórico)
+        working-directory: saida
+        run: |
+          git init -q -b ao-vivo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ao_vivo.json
+          git commit -q -m "Alagamentos de hoje (CGE)"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ao-vivo

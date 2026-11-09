@@ -49,6 +49,19 @@ except Exception:  # noqa: BLE001 — sem internet e sem previsão guardada
     st.error(ui.SEM_INTERNET + " Abaixo, os pontos de alagamento e o histórico da sua região "
              "(não dependem de internet).", icon="📶")
 
+# Alagamentos registrados hoje pelo CGE perto da pessoa (ao vivo)
+hoje = servico.alagamentos_hoje()
+hoje_perto = None
+if hoje is not None:
+    hoje = hoje[0]
+    if len(hoje):
+        hoje = hoje.assign(dist_km=geo.haversine_m(lat, lon, hoje["lat"].values, hoje["lon"].values) / 1000)
+        hoje_perto = hoje[hoje["dist_km"] <= raio].sort_values("dist_km")
+        for _, a in hoje_perto[hoje_perto["ativo"]].iterrows():
+            st.error(f"**Alagamento ativo agora** a {a['dist_km']:.1f} km: {a['local']} ({a['bairro']}), "
+                     f"desde {a['inicio']}" + (" — **intransitável**" if a["intransitavel"] else "")
+                     + ". Fonte: CGE.", icon="🔴")
+
 if prev is not None:
     ui.aviso_offline(servico.previsao_salva_em(), prev.agora, prev.cel_h["time"].max())
     pts = prev.pts.copy()
@@ -67,13 +80,15 @@ if prev is not None:
     prox24 = risk.janela(local, prev.agora, 24)
     p_regiao = risk.prob_alguma(prox24["p"])
     p_perto = risk.prob_alguma(perto["p_janela"])
+    normal_perto = risk.prob_alguma(perto["p_normal"])
     nivel = risk.pior([risk.classificar(p_perto), risk.classificar(p_regiao, "regiao")])
 
     # ------------------------------------------------ situação
     ui.alerta(
         f"Risco {nivel.lower()} de alagamento perto de você nas próximas 24h",
         (f"{len(perto)} ponto(s) recorrente(s) de alagamento a até {raio} km · chance de algum alagar: "
-         f"<b>{ui.pct(p_perto)}</b>") if len(perto) else
+         f"<b>{ui.pct(p_perto)}</b> — {risk.vezes_normal(p_perto, normal_perto)} para esses pontos "
+         f"(num dia qualquer: {ui.pct(normal_perto)})") if len(perto) else
         f"Nenhum ponto recorrente de alagamento a até {raio} km.", nivel)
 
     a, b, c = st.columns(3)
@@ -105,6 +120,8 @@ with col_m:
     folium.Marker((lat, lon), tooltip="Você está aqui", icon=folium.Icon(color="blue", icon="home")).add_to(m)
     folium.Circle((lat, lon), radius=raio * 1000, color=ui.AZUL, fill=False, weight=1.5).add_to(m)
     ui.camada_pontos(m, perto)
+    if hoje_perto is not None and len(hoje_perto):
+        ui.camada_ao_vivo(m, hoje_perto)
     ui.mostrar_mapa(m, 460)
 if col_g is not None:
     with col_g:

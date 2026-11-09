@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from src import risk, servico, ui
+from src import ao_vivo, risk, servico, ui
 
 ui.aviso_simulacao()
 try:
@@ -36,9 +36,30 @@ if criticos.empty:
 else:
     for _, p in criticos.iterrows():
         ui.alerta(f"{p['nome']} — {p['bairro']}",
-                  f"Chance de alagar: <b>{ui.pct(p['p_janela'])}</b> · pico previsto às "
+                  f"Chance de alagar: <b>{ui.pct(p['p_janela'])}</b> "
+                  f"({risk.vezes_normal(p['p_janela'], p['p_normal'])}) · pico previsto às "
                   f"{p['hora_pico']:%Hh} de {p['hora_pico']:%d/%m} · "
                   f"{p['n_eventos']} alagamentos registrados desde {p['primeiro'][:4]}", p["nivel"])
+
+# ------------------------------------------------ alagamentos de hoje (CGE, ao vivo)
+st.subheader("Alagamentos hoje (CGE, ao vivo)")
+hoje = servico.alagamentos_hoje()
+if hoje is None:
+    st.caption("Não foi possível consultar os alagamentos de hoje no CGE agora.")
+else:
+    hoje, info = hoje
+    st.markdown(ao_vivo.resumo_texto(hoje) + f" Atualizado às {ao_vivo.hora_atualizacao(info)} · fonte: {info['fonte']}.")
+    if len(hoje):
+        # Previsto x ocorrido: o que o modelo dizia para os pontos que alagaram hoje
+        comp = hoje.merge(pts[["ponto", "p_janela", "nivel", "p_normal"]], on="ponto", how="left")
+        comp["Risco previsto"] = [f"{risk.EMOJI[n]} {n} ({ui.pct(p)})" if isinstance(n, str) else "ponto novo / fora da lista"
+                                  for n, p in zip(comp["nivel"], comp["p_janela"])]
+        comp["Status"] = comp["ativo"].map({True: "🔴 Ativo", False: "Encerrado"})
+        comp["Horário"] = comp["inicio"].fillna("?") + "–" + comp["fim"].fillna("")
+        st.dataframe(comp[["Status", "local", "bairro", "Horário", "Risco previsto"]].rename(
+            columns={"local": "Local", "bairro": "Bairro"}), hide_index=True, width="stretch")
+        st.caption("\"Risco previsto\" é a chance que o app calcula agora para o ponto monitorado no "
+                   "mesmo endereço — serve para comparar o que o modelo indica com o que de fato aconteceu.")
 
 # ------------------------------------------------ mapa + ranking
 st.subheader("Mapa de risco")
@@ -53,6 +74,8 @@ cel_mapa = cel.drop(columns=["p_janela"]).merge(
 m = ui.mapa()
 ui.camada_celulas(m, cel_mapa)
 ui.camada_pontos(m, pts_mapa)
+if hoje is not None and len(hoje):
+    ui.camada_ao_vivo(m, hoje)
 ui.mostrar_mapa(m, 560)
 ui.legenda(horas)
 

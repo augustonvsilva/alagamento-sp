@@ -32,7 +32,7 @@
 
     const arquivos = [
       "app.py",
-      "src/__init__.py", "src/config.py", "src/features.py", "src/geo.py", "src/grade.py",
+      "src/__init__.py", "src/ao_vivo.py", "src/cge.py", "src/config.py", "src/features.py", "src/geo.py", "src/grade.py",
       "src/nomes.py", "src/offline.py", "src/risk.py", "src/servico.py", "src/ui.py", "src/weather.py",
       "paginas/visao_geral.py", "paginas/minha_regiao.py", "paginas/trajeto.py",
       "paginas/analise.py", "paginas/modelo.py",
@@ -66,6 +66,8 @@
       );
     });
     if (posicao) {
+      // App Android: guarda o local para o alerta de alagamento em segundo plano
+      try { window.AppAndroid?.salvarLocal(posicao.latitude, posicao.longitude); } catch {}
       params.set("lat", posicao.latitude.toFixed(5));
       params.set("lon", posicao.longitude.toFixed(5));
       if (!subpagina) params.set("pagina", "minha_regiao");
@@ -124,7 +126,7 @@
     }, 240000);
 
     mount({
-      requirements: ["folium", "requests", "tzdata"],
+      requirements: ["folium", "requests", "tzdata", "beautifulsoup4"],
       entrypoint: "app.py",
       files,
       // Pasta guardada no armazenamento do navegador: a última previsão fica salva para o app

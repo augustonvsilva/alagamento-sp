@@ -74,3 +74,24 @@ def test_sem_internet_usa_previsao_salva(pagina, tmp_path, monkeypatch):
     if pagina.endswith("minha_regiao.py"):  # mesmo sem previsão, mostra pontos e histórico
         assert any(h.value.startswith("Pontos de alagamento") for h in at.subheader)
         assert any(h.value == "Histórico da região" for h in at.subheader)
+
+
+def test_alagamento_ativo_perto_aparece(monkeypatch):
+    """Um alagamento ativo hoje perto da pessoa gera alerta em "Minha região" e entra na Visão geral."""
+    import streamlit as st
+
+    from src import ao_vivo
+    regs = [{"data": "2026-11-09", "zona": "Centro", "bairro": "Bela Vista", "inicio": "14:05", "fim": None,
+             "local": "AV PAULISTA", "sentido": None, "referencia": None, "intransitavel": True, "ativo": True}]
+    monkeypatch.setattr(ao_vivo, "buscar", lambda: {"atualizado_em": ao_vivo.agora().isoformat(),
+                                                     "fonte": "teste", "registros": regs})
+    st.cache_data.clear()
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=120)
+    at.session_state["minha_loc"] = (-23.5614, -46.6559)
+    at.run()
+    at.switch_page("paginas/minha_regiao.py").run()
+    assert not at.exception, at.exception
+    assert any("Alagamento ativo agora" in e.value for e in at.error)
+    at.switch_page("paginas/visao_geral.py").run()
+    assert not at.exception, at.exception
+    assert any("ainda ativo" in m.value for m in at.markdown)

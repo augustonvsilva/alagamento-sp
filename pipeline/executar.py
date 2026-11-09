@@ -10,7 +10,7 @@ públicas). As execuções seguintes são incrementais e usam cache.
 import argparse
 from datetime import date, timedelta
 
-from pipeline import chuva_historica, coletar_cge, geocodificar, treinar_modelo
+from pipeline import chuva_historica, clima_historico, coletar_cge, geocodificar, treinar_modelo
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
@@ -19,11 +19,16 @@ if __name__ == "__main__":
     a = ap.parse_args()
     fim = date.today() - timedelta(days=2)
 
-    print("== 1/4 Coleta CGE ==")
+    print("== 1/5 Coleta CGE ==")
     coletar_cge.main(a.inicio, fim, workers=0 if a.pular_coleta else 1)
-    print("== 2/4 Geocodificação ==")
+    print("== 2/5 Geocodificação ==")
     geocodificar.main()
-    print("== 3/4 Chuva histórica ==")
+    print("== 3/5 Chuva histórica ==")
     chuva_historica.main(a.inicio, fim)
-    print("== 4/4 Treino ==")
+    print("== 4/5 Umidade e vento históricos (experimento) ==")
+    try:
+        clima_historico.main(a.inicio, fim)
+    except Exception as e:  # noqa: BLE001 — o experimento é opcional; o modelo principal não depende dele
+        print(f"  pulado: {e}")
+    print("== 5/5 Treino ==")
     treinar_modelo.main()

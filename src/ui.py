@@ -106,9 +106,24 @@ def camada_pontos(m: folium.Map, pts: pd.DataFrame, col_p="p_janela"):
             location=(p["lat"], p["lon"]), radius=4 + 3 * risk.ORDEM[nivel],
             color="#333", weight=0.6, fill=True, fill_color=risk.CORES[nivel], fill_opacity=0.9,
             tooltip=(f"<b>{p['nome']}</b> — {p['bairro']}<br>"
-                     f"Chance de alagar: <b>{pct(p[col_p])}</b><br>"
+                     f"Chance de alagar: <b>{pct(p[col_p])}</b>"
+                     + (f" ({risk.vezes_normal(p[col_p], p['p_normal'])})" if "p_normal" in p else "") + "<br>"
                      f"Pico previsto: {p['hora_pico']:%d/%m %Hh}<br>"
                      f"Histórico: {p['n_eventos']} alagamentos desde {p['primeiro'][:4]}"),
+        ).add_to(m)
+
+
+def camada_ao_vivo(m: folium.Map, hoje: pd.DataFrame):
+    """Alagamentos registrados hoje pelo CGE: vermelho = ainda ativo, cinza = já terminou."""
+    for _, a in hoje.dropna(subset=["lat", "lon"]).iterrows():
+        status = "🔴 <b>Ativo agora</b>" if a["ativo"] else "Encerrado"
+        horario = f"desde {a['inicio']}" if a["ativo"] else f"{a['inicio'] or '?'}–{a['fim'] or '?'}"
+        folium.Marker(
+            location=(a["lat"], a["lon"]),
+            icon=folium.Icon(color="red" if a["ativo"] else "lightgray", icon="tint"),
+            tooltip=(f"{status} ({horario}) — CGE hoje<br><b>{a['local']}</b> — {a['bairro']}"
+                     + ("<br>Intransitável" if a["intransitavel"] else "")
+                     + ("<br><i>local aproximado (centro do bairro)</i>" if a["precisao"] == "bairro" else "")),
         ).add_to(m)
 
 
