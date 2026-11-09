@@ -11,3 +11,4 @@ data/processed/chuva_horaria.parquet
 .cache/
 data/raw/clima/
 data/processed/clima_horario.parquet
+.vscode/
