@@ -1,4 +1,4 @@
-# 🌧️ Alerta Alagamento SP
+# 🌧️ Alaga Aí?
 
 Aplicação web que **prevê alagamentos em São Paulo** combinando o histórico oficial de
 alagamentos do CGE (Centro de Gerenciamento de Emergências da Prefeitura) com a previsão
@@ -133,7 +133,7 @@ Para testar localmente: `python -m http.server 8600` e abrir http://localhost:86
 
 > Ao criar arquivos novos que o app usa (páginas, módulos, dados), adicione-os à lista `arquivos` do `index.html`.
 
-**App Android (APK):** baixe [`apk/AlertaAlagamentoSP.apk`](apk/AlertaAlagamentoSP.apk) no celular e
+**App Android (APK):** baixe [`apk/AlagaAi.apk`](apk/AlagaAi.apk) no celular e
 instale (o Android pede para permitir "instalar apps desconhecidos"). Ao abrir, o app **pede a
 localização** e já mostra o risco de alagamento na área da pessoa. Se ela recusar, o app abre
 normalmente e dá para buscar um endereço.

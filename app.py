@@ -1,4 +1,4 @@
-"""Alerta Alagamento SP — previsão de alagamentos a partir da previsão do tempo.
+"""Alaga Aí? — previsão de alagamentos a partir da previsão do tempo.
 
 Rodar:  streamlit run app.py
 """
@@ -7,7 +7,7 @@ import streamlit as st
 from src import servico, ui
 from src.config import MODELS, PROCESSED, ROOT
 
-st.set_page_config(page_title="Alerta Alagamento SP", page_icon="🌧️", layout="wide",
+st.set_page_config(page_title="Alaga Aí?", page_icon="🌧️", layout="wide",
                    initial_sidebar_state="collapsed",
                    menu_items={"About": "Projeto acadêmico de análise de dados — previsão de "
                                         "alagamentos em São Paulo com dados do CGE e Open-Meteo."})
