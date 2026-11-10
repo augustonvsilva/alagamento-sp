@@ -68,12 +68,12 @@ flowchart LR
 | Modelo | ROC-AUC | PR-AUC | Brier |
 |---|---|---|---|
 | Heurística do protótipo (limiares fixos) | 0,877 | 0,017 | 0,00342 |
-| Gradient boosting | 0,942 | 0,046 | 0,00193 |
+| Gradient boosting | 0,942 | 0,047 | 0,00193 |
 | **Regressão logística (escolhido)** | 0,928 | 0,046 | 0,00193 |
 
 Alagamento é raro (0,20% das horas-região no teste), então um classificador aleatório teria PR-AUC ≈ 0,002.
 O modelo escolhido é **~23× melhor que o acaso** e **2,7× melhor que a heurística**. O gradient boosting
-empata no PR-AUC (+1,5%), abaixo do ganho mínimo de 5% definido para justificar um modelo mais complexo.
+empata no PR-AUC (+2,5%), abaixo do ganho mínimo de 5% definido para justificar um modelo mais complexo.
 
 **Principais achados da análise:**
 - 82% dos alagamentos ocorrem de novembro a março, com pico às 16h (chuvas convectivas de fim de tarde).
